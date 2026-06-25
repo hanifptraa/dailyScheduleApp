@@ -5,6 +5,7 @@ import 'providers/app_providers.dart';
 import 'screens/history/history_screen.dart';
 import 'screens/schedule_management/schedule_management_screen.dart';
 import 'screens/settings/settings_screen.dart';
+import 'screens/statistics/statistics_screen.dart';
 import 'screens/today/today_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -13,7 +14,7 @@ class DailyScheduleApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
+    final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.light;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -32,6 +33,7 @@ class AppShell extends ConsumerWidget {
   static const _screens = [
     TodayScreen(),
     ScheduleManagementScreen(),
+    StatisticsScreen(),
     HistoryScreen(),
     SettingsScreen(),
   ];
@@ -48,21 +50,30 @@ class AppShell extends ConsumerWidget {
             ref.read(navigationIndexProvider.notifier).setIndex(value),
         destinations: const [
           NavigationDestination(
-              icon: Icon(Icons.today_outlined),
-              selectedIcon: Icon(Icons.today),
-              label: 'Today'),
+            icon: Icon(Icons.today_outlined),
+            selectedIcon: Icon(Icons.today),
+            label: 'Hari Ini',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.list_alt_outlined),
-              selectedIcon: Icon(Icons.list_alt),
-              label: 'Schedule'),
+            icon: Icon(Icons.view_timeline_outlined),
+            selectedIcon: Icon(Icons.view_timeline),
+            label: 'Jadwal',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.history_outlined),
-              selectedIcon: Icon(Icons.history),
-              label: 'History'),
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: 'Statistik',
+          ),
           NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
-              label: 'Settings'),
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Riwayat',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.tune_outlined),
+            selectedIcon: Icon(Icons.tune),
+            label: 'Setelan',
+          ),
         ],
       ),
     );

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/app_providers.dart';
+import '../../utils/date_utils.dart';
 import '../../widgets/empty_state.dart';
-import '../statistics/statistics_screen.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -13,7 +13,7 @@ class HistoryScreen extends ConsumerWidget {
     final asyncHistory = ref.watch(historyProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(title: const Text('Riwayat')),
       body: RefreshIndicator(
         onRefresh: () async => refreshMainProviders(ref),
         child: asyncHistory.when(
@@ -25,50 +25,85 @@ class HistoryScreen extends ConsumerWidget {
               return ListView(
                 children: const [
                   SizedBox(
-                      height: 480,
-                      child: EmptyState(
-                          icon: Icons.history_toggle_off,
-                          title: 'Belum ada riwayat',
-                          message:
-                              'Buka Today dan gunakan checklist agar riwayat tersimpan.')),
+                    height: 480,
+                    child: EmptyState(
+                      icon: Icons.history_toggle_off,
+                      title: 'Belum ada riwayat',
+                      message:
+                          'Buka Hari Ini dan gunakan checklist agar riwayat tersimpan.',
+                    ),
+                  ),
                 ],
               );
             }
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              children: [
-                const StatisticsScreen(),
-                const SizedBox(height: 14),
-                ...history.map((day) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Card(
-                        child: ExpansionTile(
-                          tilePadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          title: Text(day.dateKey,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w900)),
-                          subtitle: Text(
-                              '${day.mode.label} • ${day.done}/${day.total} selesai • ${day.percent}% • ${day.status}'),
-                          children: [
-                            const Divider(height: 1),
-                            for (final item in day.items)
-                              ListTile(
-                                leading: Icon(item.isDone
-                                    ? Icons.check_circle
-                                    : Icons.radio_button_unchecked),
-                                title: Text(item.snapshotTitle),
-                                subtitle: Text(
-                                    '${item.snapshotStartTime} - ${item.snapshotEndTime} • ${item.snapshotCategory}'),
-                              ),
-                          ],
-                        ),
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+              itemCount: history.length,
+              itemBuilder: (context, index) {
+                final day = history[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Card(
+                    child: ExpansionTile(
+                      tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      childrenPadding: const EdgeInsets.only(bottom: 8),
+                      title: Text(
+                        AppDateUtils.formatDateKey(day.dateKey),
+                        style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
-                    )),
-              ],
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Text(
+                            '${day.mode.label} • ${day.done}/${day.total} selesai • ${day.percent}% • ${day.status}'),
+                      ),
+                      trailing: _PercentPill(percent: day.percent),
+                      children: [
+                        const Divider(height: 1),
+                        for (final item in day.items)
+                          ListTile(
+                            leading: Icon(item.isDone
+                                ? Icons.check_circle
+                                : Icons.radio_button_unchecked),
+                            title: Text(item.snapshotTitle,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                            subtitle: Text(
+                                '${item.snapshotStartTime} - ${item.snapshotEndTime} • ${item.snapshotCategory}'),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _PercentPill extends StatelessWidget {
+  const _PercentPill({required this.percent});
+
+  final int percent;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 54,
+      height: 34,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$percent%',
+        style: TextStyle(
+            color: scheme.onPrimaryContainer, fontWeight: FontWeight.w900),
       ),
     );
   }

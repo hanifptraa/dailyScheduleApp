@@ -34,33 +34,38 @@ final settingsProvider = FutureProvider<Map<String, String>>((ref) async {
 
 final themeModeProvider = FutureProvider<ThemeMode>((ref) async {
   final settings = await ref.watch(settingsProvider.future);
-  final value = settings['themeMode'] ?? 'system';
-  return switch (value) {
-    'light' => ThemeMode.light,
-    'dark' => ThemeMode.dark,
-    _ => ThemeMode.system,
-  };
+  final value = settings['themeMode'] ?? 'light';
+  return value == 'dark' ? ThemeMode.dark : ThemeMode.light;
+});
+
+final scheduleModesProvider =
+    FutureProvider<List<ScheduleModeOption>>((ref) async {
+  return ref.watch(scheduleRepositoryProvider).getScheduleModes();
+});
+
+final categoriesProvider = FutureProvider<List<String>>((ref) async {
+  return ref.watch(scheduleRepositoryProvider).getCategories();
 });
 
 final todayDataProvider = FutureProvider<TodayData>((ref) async {
   return ref.watch(scheduleRepositoryProvider).getTodayData(DateTime.now());
 });
 
-final todayModeProvider = FutureProvider<ScheduleModeType>((ref) async {
+final todayModeProvider = FutureProvider<ScheduleModeOption>((ref) async {
   final key = AppDateUtils.dateKey(DateTime.now());
   return ref.watch(scheduleRepositoryProvider).getDailyMode(key);
 });
 
 final scheduleModeFilterProvider =
-    NotifierProvider<ScheduleModeFilterNotifier, ScheduleModeType>(
+    NotifierProvider<ScheduleModeFilterNotifier, ScheduleModeOption>(
   ScheduleModeFilterNotifier.new,
 );
 
-class ScheduleModeFilterNotifier extends Notifier<ScheduleModeType> {
+class ScheduleModeFilterNotifier extends Notifier<ScheduleModeOption> {
   @override
-  ScheduleModeType build() => ScheduleModeType.regular;
+  ScheduleModeOption build() => ScheduleModeOption.regular;
 
-  void setMode(ScheduleModeType mode) {
+  void setMode(ScheduleModeOption mode) {
     state = mode;
   }
 }
@@ -82,6 +87,8 @@ void refreshMainProviders(WidgetRef ref) {
   ref.invalidate(todayDataProvider);
   ref.invalidate(todayModeProvider);
   ref.invalidate(scheduleItemsProvider);
+  ref.invalidate(scheduleModesProvider);
+  ref.invalidate(categoriesProvider);
   ref.invalidate(historyProvider);
   ref.invalidate(statisticsProvider);
   ref.invalidate(settingsProvider);

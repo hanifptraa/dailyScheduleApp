@@ -13,7 +13,8 @@ class ScheduleRepository {
 
   Future<void> seedDefaultDataIfNeeded() async {
     final countExp = db.scheduleItems.id.count();
-    final count = await (db.selectOnly(db.scheduleItems)..addColumns([countExp]))
+    final count = await (db.selectOnly(db.scheduleItems)
+          ..addColumns([countExp]))
         .map((row) => row.read(countExp) ?? 0)
         .getSingle();
 
@@ -31,13 +32,15 @@ class ScheduleRepository {
   Future<void> _seedSettingsIfNeeded() async {
     final settings = {
       'userName': 'Hanif',
-      'themeMode': 'system',
+      'themeMode': 'light',
       'targetSleep': '21:00',
       'targetWake': '03:00',
     };
 
     for (final entry in settings.entries) {
-      final existing = await (db.select(db.appSettings)..where((t) => t.key.equals(entry.key))).getSingleOrNull();
+      final existing = await (db.select(db.appSettings)
+            ..where((t) => t.key.equals(entry.key)))
+          .getSingleOrNull();
       if (existing == null) {
         await db.into(db.appSettings).insert(
               AppSettingsCompanion.insert(
@@ -50,7 +53,9 @@ class ScheduleRepository {
   }
 
   Future<String> getSetting(String key, String fallback) async {
-    final row = await (db.select(db.appSettings)..where((t) => t.key.equals(key))).getSingleOrNull();
+    final row = await (db.select(db.appSettings)
+          ..where((t) => t.key.equals(key)))
+        .getSingleOrNull();
     return row?.value ?? fallback;
   }
 
@@ -61,7 +66,9 @@ class ScheduleRepository {
 
   Future<void> setSetting(String key, String value) async {
     final now = DateTime.now();
-    final existing = await (db.select(db.appSettings)..where((t) => t.key.equals(key))).getSingleOrNull();
+    final existing = await (db.select(db.appSettings)
+          ..where((t) => t.key.equals(key)))
+        .getSingleOrNull();
     if (existing == null) {
       await db.into(db.appSettings).insert(
             AppSettingsCompanion.insert(
@@ -78,17 +85,54 @@ class ScheduleRepository {
     }
   }
 
-  Future<ScheduleModeType> getDailyMode(String dateKey) async {
-    final row = await (db.select(db.dailyModes)..where((t) => t.date.equals(dateKey))).getSingleOrNull();
-    if (row != null) return ScheduleModeType.fromCode(row.scheduleMode);
+  Future<List<ScheduleModeOption>> getScheduleModes() async {
+    final rows = await db.select(db.scheduleItems).get();
+    final byCode = <String, ScheduleModeOption>{
+      for (final mode in ScheduleModeOption.defaults) mode.code: mode,
+    };
 
-    await setDailyMode(dateKey, ScheduleModeType.regular);
-    return ScheduleModeType.regular;
+    for (final row in rows) {
+      final mode = ScheduleModeOption.fromCode(row.scheduleMode);
+      if (mode.code.isNotEmpty) byCode[mode.code] = mode;
+    }
+
+    final defaults = ScheduleModeOption.defaults
+        .where((mode) => byCode.containsKey(mode.code))
+        .toList();
+    final customs = byCode.values
+        .where((mode) => !ScheduleModeOption.defaults.contains(mode))
+        .toList()
+      ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+    return [...defaults, ...customs];
   }
 
-  Future<void> setDailyMode(String dateKey, ScheduleModeType mode) async {
+  Future<List<String>> getCategories() async {
+    final rows = await db.select(db.scheduleItems).get();
+    final values = <String>{...defaultCategories};
+    for (final row in rows) {
+      final category = row.category.trim();
+      if (category.isNotEmpty) values.add(category);
+    }
+    final list = values.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
+  Future<ScheduleModeOption> getDailyMode(String dateKey) async {
+    final row = await (db.select(db.dailyModes)
+          ..where((t) => t.date.equals(dateKey)))
+        .getSingleOrNull();
+    if (row != null) return ScheduleModeOption.fromCode(row.scheduleMode);
+
+    await setDailyMode(dateKey, ScheduleModeOption.regular);
+    return ScheduleModeOption.regular;
+  }
+
+  Future<void> setDailyMode(String dateKey, ScheduleModeOption mode) async {
     final now = DateTime.now();
-    final existing = await (db.select(db.dailyModes)..where((t) => t.date.equals(dateKey))).getSingleOrNull();
+    final existing = await (db.select(db.dailyModes)
+          ..where((t) => t.date.equals(dateKey)))
+        .getSingleOrNull();
     if (existing == null) {
       await db.into(db.dailyModes).insert(
             DailyModesCompanion.insert(
@@ -99,26 +143,33 @@ class ScheduleRepository {
             ),
           );
     } else {
-      await (db.update(db.dailyModes)..where((t) => t.date.equals(dateKey))).write(
-        DailyModesCompanion(scheduleMode: Value(mode.code), updatedAt: Value(now)),
+      await (db.update(db.dailyModes)..where((t) => t.date.equals(dateKey)))
+          .write(
+        DailyModesCompanion(
+            scheduleMode: Value(mode.code), updatedAt: Value(now)),
       );
     }
 
     await ensureChecklistRowsForDate(dateKey, mode);
   }
 
-  Future<List<ScheduleItem>> getActiveScheduleItems(ScheduleModeType mode) async {
+  Future<List<ScheduleItem>> getActiveScheduleItems(
+      ScheduleModeOption mode) async {
     final rows = await (db.select(db.scheduleItems)
-          ..where((t) => t.isActive.equals(true) & t.scheduleMode.equals(mode.code)))
+          ..where((t) =>
+              t.isActive.equals(true) & t.scheduleMode.equals(mode.code)))
         .get();
-    rows.sort((a, b) => AppTimeUtils.toMinutes(a.startTime).compareTo(AppTimeUtils.toMinutes(b.startTime)));
+    rows.sort((a, b) => AppTimeUtils.toMinutes(a.startTime)
+        .compareTo(AppTimeUtils.toMinutes(b.startTime)));
     return rows;
   }
 
-  Future<void> ensureChecklistRowsForDate(String dateKey, ScheduleModeType mode) async {
+  Future<void> ensureChecklistRowsForDate(
+      String dateKey, ScheduleModeOption mode) async {
     final items = await getActiveScheduleItems(mode);
     final existing = await (db.select(db.dailyChecklists)
-          ..where((t) => t.date.equals(dateKey) & t.scheduleMode.equals(mode.code)))
+          ..where(
+              (t) => t.date.equals(dateKey) & t.scheduleMode.equals(mode.code)))
         .get();
     final existingIds = existing.map((row) => row.scheduleItemId).toSet();
     final now = DateTime.now();
@@ -170,7 +221,7 @@ class ScheduleRepository {
 
   Future<void> setChecklistDone({
     required String dateKey,
-    required ScheduleModeType mode,
+    required ScheduleModeOption mode,
     required ScheduleItem item,
     required bool isDone,
   }) async {
@@ -196,16 +247,18 @@ class ScheduleRepository {
     required String startTime,
     required String endTime,
     required String category,
-    required ScheduleModeType mode,
+    required ScheduleModeOption mode,
   }) async {
     final now = DateTime.now();
     return db.into(db.scheduleItems).insert(
           ScheduleItemsCompanion.insert(
             title: title,
-            description: Value(description?.trim().isEmpty == true ? null : description),
+            description: Value(description == null || description.trim().isEmpty
+                ? null
+                : description.trim()),
             startTime: startTime,
             endTime: endTime,
-            category: category,
+            category: category.trim(),
             scheduleMode: mode.code,
             isActive: const Value(true),
             createdAt: Value(now),
@@ -221,16 +274,18 @@ class ScheduleRepository {
     required String startTime,
     required String endTime,
     required String category,
-    required ScheduleModeType mode,
+    required ScheduleModeOption mode,
     required bool isActive,
   }) async {
     await (db.update(db.scheduleItems)..where((t) => t.id.equals(id))).write(
       ScheduleItemsCompanion(
         title: Value(title),
-        description: Value(description?.trim().isEmpty == true ? null : description),
+        description: Value(description == null || description.trim().isEmpty
+            ? null
+            : description.trim()),
         startTime: Value(startTime),
         endTime: Value(endTime),
-        category: Value(category),
+        category: Value(category.trim()),
         scheduleMode: Value(mode.code),
         isActive: Value(isActive),
         updatedAt: Value(DateTime.now()),
@@ -240,14 +295,19 @@ class ScheduleRepository {
 
   Future<void> softDeleteScheduleItem(int id) async {
     await (db.update(db.scheduleItems)..where((t) => t.id.equals(id))).write(
-      ScheduleItemsCompanion(isActive: const Value(false), updatedAt: Value(DateTime.now())),
+      ScheduleItemsCompanion(
+          isActive: const Value(false), updatedAt: Value(DateTime.now())),
     );
   }
 
   Future<List<HistoryDayData>> getHistory() async {
-    final checks = await (db.select(db.dailyChecklists)..orderBy([(t) => OrderingTerm.desc(t.date)])).get();
+    final checks = await (db.select(db.dailyChecklists)
+          ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+        .get();
     final modes = await db.select(db.dailyModes).get();
-    final modeMap = {for (final m in modes) m.date: ScheduleModeType.fromCode(m.scheduleMode)};
+    final modeMap = {
+      for (final m in modes) m.date: ScheduleModeOption.fromCode(m.scheduleMode)
+    };
 
     final grouped = <String, List<DailyChecklist>>{};
     for (final check in checks) {
@@ -255,8 +315,9 @@ class ScheduleRepository {
     }
 
     final days = grouped.entries.map((entry) {
-      final mode = modeMap[entry.key] ?? ScheduleModeType.regular;
-      final modeItems = entry.value.where((item) => item.scheduleMode == mode.code).toList();
+      final mode = modeMap[entry.key] ?? ScheduleModeOption.regular;
+      final modeItems =
+          entry.value.where((item) => item.scheduleMode == mode.code).toList();
       return HistoryDayData(
         dateKey: entry.key,
         mode: mode,
@@ -274,7 +335,10 @@ class ScheduleRepository {
     final today = await getTodayData(DateTime.now());
     final history = await getHistory();
     final last7 = history.take(7).toList();
-    final avg = last7.isEmpty ? today.percent : (last7.map((e) => e.percent).reduce((a, b) => a + b) / last7.length).round();
+    final avg = last7.isEmpty
+        ? today.percent
+        : (last7.map((e) => e.percent).reduce((a, b) => a + b) / last7.length)
+            .round();
     final productiveDays = history.where((d) => d.percent >= 70).length;
 
     int streak = 0;
@@ -294,11 +358,51 @@ class ScheduleRepository {
 
     final doneCategoryCount = <String, int>{};
     final missedCategoryCount = <String, int>{};
+    final totalCategoryCount = <String, int>{};
+    var totalTasks = 0;
+    var completedTasks = 0;
+
     for (final day in history) {
       for (final item in day.items) {
-        final target = item.isDone ? doneCategoryCount : missedCategoryCount;
-        target[item.snapshotCategory] = (target[item.snapshotCategory] ?? 0) + 1;
+        totalTasks++;
+        totalCategoryCount[item.snapshotCategory] =
+            (totalCategoryCount[item.snapshotCategory] ?? 0) + 1;
+        if (item.isDone) {
+          completedTasks++;
+          doneCategoryCount[item.snapshotCategory] =
+              (doneCategoryCount[item.snapshotCategory] ?? 0) + 1;
+        } else {
+          missedCategoryCount[item.snapshotCategory] =
+              (missedCategoryCount[item.snapshotCategory] ?? 0) + 1;
+        }
       }
+    }
+
+    final categories = totalCategoryCount.entries.map((entry) {
+      return CategoryPerformance(
+        category: entry.key,
+        done: doneCategoryCount[entry.key] ?? 0,
+        total: entry.value,
+      );
+    }).toList()
+      ..sort((a, b) {
+        final byPercent = b.percent.compareTo(a.percent);
+        if (byPercent != 0) return byPercent;
+        return b.total.compareTo(a.total);
+      });
+
+    final trend = last7.reversed.map((day) {
+      return TrendPoint(
+        dateKey: day.dateKey,
+        percent: day.percent,
+        done: day.done,
+        total: day.total,
+      );
+    }).toList();
+
+    HistoryDayData? bestDay;
+    for (final day in history) {
+      if (bestDay == null || day.percent > bestDay.percent) bestDay = day;
     }
 
     return StatisticsData(
@@ -308,19 +412,32 @@ class ScheduleRepository {
       streak: streak,
       mostDoneCategory: _topCategory(doneCategoryCount),
       mostMissedCategory: _topCategory(missedCategoryCount),
+      totalTasks: totalTasks,
+      completedTasks: completedTasks,
+      completionRate: totalTasks == 0
+          ? today.percent
+          : ((completedTasks / totalTasks) * 100).round(),
+      consistencyScore: avg,
+      bestDayLabel:
+          bestDay == null ? '-' : AppDateUtils.formatDateKey(bestDay.dateKey),
+      bestDayPercent: bestDay?.percent ?? 0,
+      trend: trend,
+      categories: categories.take(6).toList(),
     );
   }
 
   String _topCategory(Map<String, int> data) {
     if (data.isEmpty) return '-';
-    final entries = data.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final entries = data.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return entries.first.key;
   }
 
   Future<void> resetSchedulesToDefault() async {
     final now = DateTime.now();
     await (db.update(db.scheduleItems)).write(
-      ScheduleItemsCompanion(isActive: const Value(false), updatedAt: Value(now)),
+      ScheduleItemsCompanion(
+          isActive: const Value(false), updatedAt: Value(now)),
     );
     await db.batch((batch) {
       batch.insertAll(db.scheduleItems, [
@@ -352,53 +469,91 @@ class ScheduleRepository {
 }
 
 class _SeedSchedule {
-  const _SeedSchedule(this.start, this.end, this.title, this.category, this.mode);
+  const _SeedSchedule(
+      this.start, this.end, this.title, this.category, this.mode);
   final String start;
   final String end;
   final String title;
   final String category;
-  final ScheduleModeType mode;
+  final ScheduleModeOption mode;
 }
 
 const _regularDefaults = [
-  _SeedSchedule('03:00', '03:15', 'Bangun, wudhu, minum air', 'Persiapan', ScheduleModeType.regular),
-  _SeedSchedule('03:15', '04:15', 'Sholat Tahajud + Dzikir', 'Ibadah', ScheduleModeType.regular),
-  _SeedSchedule('04:15', '05:00', 'Baca Qur’an sampai Subuh', 'Ibadah', ScheduleModeType.regular),
-  _SeedSchedule('05:00', '07:00', 'Belajar Basic PHP/Laravel', 'Coding', ScheduleModeType.regular),
-  _SeedSchedule('07:00', '07:30', 'Sholat Dhuha', 'Ibadah', ScheduleModeType.regular),
-  _SeedSchedule('07:30', '08:00', 'Sarapan, mandi, beres kamar', 'Rutinitas', ScheduleModeType.regular),
-  _SeedSchedule('08:00', '10:00', 'Project / Roblox Studio', 'Project', ScheduleModeType.regular),
-  _SeedSchedule('10:00', '10:45', 'Workout tipis / Ball Handling Basket', 'Olahraga', ScheduleModeType.regular),
-  _SeedSchedule('10:45', '11:15', 'Pendinginan, mandi, siap Dzuhur', 'Rutinitas', ScheduleModeType.regular),
-  _SeedSchedule('12:00', '12:30', 'Sholat Dzuhur + Sunnah Qobliyah/Ba’diyah', 'Ibadah', ScheduleModeType.regular),
-  _SeedSchedule('12:30', '13:00', 'Makan siang', 'Rutinitas', ScheduleModeType.regular),
-  _SeedSchedule('13:00', '14:15', 'Tidur siang', 'Istirahat', ScheduleModeType.regular),
-  _SeedSchedule('14:15', '15:15', 'Konten / Digital Skill', 'Digital Skill', ScheduleModeType.regular),
-  _SeedSchedule('15:30', '16:00', 'Sholat Ashar + dzikir pendek', 'Ibadah', ScheduleModeType.regular),
-  _SeedSchedule('16:00', '17:15', 'Review project / aktivitas ringan', 'Review', ScheduleModeType.regular),
-  _SeedSchedule('18:00', '19:00', 'Maghrib, Qur’an ringan, makan malam', 'Ibadah', ScheduleModeType.regular),
-  _SeedSchedule('19:00', '19:30', 'Sholat Isya', 'Ibadah', ScheduleModeType.regular),
-  _SeedSchedule('19:30', '20:30', 'Review hari ini + planning besok', 'Planning', ScheduleModeType.regular),
-  _SeedSchedule('20:30', '21:00', 'Persiapan tidur', 'Istirahat', ScheduleModeType.regular),
+  _SeedSchedule('03:00', '03:15', 'Bangun, wudhu, minum air', 'Persiapan',
+      ScheduleModeOption.regular),
+  _SeedSchedule('03:15', '04:15', 'Sholat Tahajud + Dzikir', 'Ibadah',
+      ScheduleModeOption.regular),
+  _SeedSchedule('04:15', '05:00', 'Baca Qur\'an sampai Subuh', 'Ibadah',
+      ScheduleModeOption.regular),
+  _SeedSchedule('05:00', '07:00', 'Belajar Basic PHP/Laravel', 'Coding',
+      ScheduleModeOption.regular),
+  _SeedSchedule(
+      '07:00', '07:30', 'Sholat Dhuha', 'Ibadah', ScheduleModeOption.regular),
+  _SeedSchedule('07:30', '08:00', 'Sarapan, mandi, beres kamar', 'Rutinitas',
+      ScheduleModeOption.regular),
+  _SeedSchedule('08:00', '10:00', 'Project / Roblox Studio', 'Project',
+      ScheduleModeOption.regular),
+  _SeedSchedule('10:00', '10:45', 'Workout tipis / Ball Handling Basket',
+      'Olahraga', ScheduleModeOption.regular),
+  _SeedSchedule('10:45', '11:15', 'Pendinginan, mandi, siap Dzuhur',
+      'Rutinitas', ScheduleModeOption.regular),
+  _SeedSchedule('12:00', '12:30', 'Sholat Dzuhur + Sunnah Qobliyah/Ba\'diyah',
+      'Ibadah', ScheduleModeOption.regular),
+  _SeedSchedule(
+      '12:30', '13:00', 'Makan siang', 'Rutinitas', ScheduleModeOption.regular),
+  _SeedSchedule(
+      '13:00', '14:15', 'Tidur siang', 'Istirahat', ScheduleModeOption.regular),
+  _SeedSchedule('14:15', '15:15', 'Konten / Digital Skill', 'Digital Skill',
+      ScheduleModeOption.regular),
+  _SeedSchedule('15:30', '16:00', 'Sholat Ashar + dzikir pendek', 'Ibadah',
+      ScheduleModeOption.regular),
+  _SeedSchedule('16:00', '17:15', 'Review project / aktivitas ringan', 'Review',
+      ScheduleModeOption.regular),
+  _SeedSchedule('18:00', '19:00', 'Maghrib, Qur\'an ringan, makan malam',
+      'Ibadah', ScheduleModeOption.regular),
+  _SeedSchedule(
+      '19:00', '19:30', 'Sholat Isya', 'Ibadah', ScheduleModeOption.regular),
+  _SeedSchedule('19:30', '20:30', 'Review hari ini + planning besok',
+      'Planning', ScheduleModeOption.regular),
+  _SeedSchedule('20:30', '21:00', 'Persiapan tidur', 'Istirahat',
+      ScheduleModeOption.regular),
 ];
 
 const _basketDefaults = [
-  _SeedSchedule('03:00', '03:15', 'Bangun, wudhu, minum air', 'Persiapan', ScheduleModeType.basket),
-  _SeedSchedule('03:15', '04:15', 'Sholat Tahajud + Dzikir', 'Ibadah', ScheduleModeType.basket),
-  _SeedSchedule('04:15', '05:00', 'Baca Qur’an sampai Subuh', 'Ibadah', ScheduleModeType.basket),
-  _SeedSchedule('05:00', '05:40', 'Review Laravel ringan', 'Coding', ScheduleModeType.basket),
-  _SeedSchedule('05:40', '06:00', 'Persiapan basket', 'Olahraga', ScheduleModeType.basket),
-  _SeedSchedule('06:00', '08:30', 'Basket', 'Olahraga', ScheduleModeType.basket),
-  _SeedSchedule('08:30', '09:30', 'Pulang, mandi, sarapan', 'Rutinitas', ScheduleModeType.basket),
-  _SeedSchedule('09:30', '11:00', 'Project ringan', 'Project', ScheduleModeType.basket),
-  _SeedSchedule('12:00', '12:30', 'Sholat Dzuhur + Sunnah Qobliyah/Ba’diyah', 'Ibadah', ScheduleModeType.basket),
-  _SeedSchedule('12:30', '13:00', 'Makan siang', 'Rutinitas', ScheduleModeType.basket),
-  _SeedSchedule('13:00', '14:30', 'Tidur siang', 'Istirahat', ScheduleModeType.basket),
-  _SeedSchedule('14:30', '15:30', 'Konten / edit video / digital skill', 'Digital Skill', ScheduleModeType.basket),
-  _SeedSchedule('15:30', '16:00', 'Sholat Ashar', 'Ibadah', ScheduleModeType.basket),
-  _SeedSchedule('16:00', '17:00', 'Aktivitas ringan / recovery', 'Istirahat', ScheduleModeType.basket),
-  _SeedSchedule('18:00', '19:00', 'Maghrib, Qur’an ringan, makan malam', 'Ibadah', ScheduleModeType.basket),
-  _SeedSchedule('19:00', '19:30', 'Sholat Isya', 'Ibadah', ScheduleModeType.basket),
-  _SeedSchedule('19:30', '20:30', 'Review hari ini + planning besok', 'Planning', ScheduleModeType.basket),
-  _SeedSchedule('20:30', '21:00', 'Persiapan tidur', 'Istirahat', ScheduleModeType.basket),
+  _SeedSchedule('03:00', '03:15', 'Bangun, wudhu, minum air', 'Persiapan',
+      ScheduleModeOption.basket),
+  _SeedSchedule('03:15', '04:15', 'Sholat Tahajud + Dzikir', 'Ibadah',
+      ScheduleModeOption.basket),
+  _SeedSchedule('04:15', '05:00', 'Baca Qur\'an sampai Subuh', 'Ibadah',
+      ScheduleModeOption.basket),
+  _SeedSchedule('05:00', '05:40', 'Review Laravel ringan', 'Coding',
+      ScheduleModeOption.basket),
+  _SeedSchedule('05:40', '06:00', 'Persiapan basket', 'Olahraga',
+      ScheduleModeOption.basket),
+  _SeedSchedule(
+      '06:00', '08:30', 'Basket', 'Olahraga', ScheduleModeOption.basket),
+  _SeedSchedule('08:30', '09:30', 'Pulang, mandi, sarapan', 'Rutinitas',
+      ScheduleModeOption.basket),
+  _SeedSchedule(
+      '09:30', '11:00', 'Project ringan', 'Project', ScheduleModeOption.basket),
+  _SeedSchedule('12:00', '12:30', 'Sholat Dzuhur + Sunnah Qobliyah/Ba\'diyah',
+      'Ibadah', ScheduleModeOption.basket),
+  _SeedSchedule(
+      '12:30', '13:00', 'Makan siang', 'Rutinitas', ScheduleModeOption.basket),
+  _SeedSchedule(
+      '13:00', '14:30', 'Tidur siang', 'Istirahat', ScheduleModeOption.basket),
+  _SeedSchedule('14:30', '15:30', 'Konten / edit video / digital skill',
+      'Digital Skill', ScheduleModeOption.basket),
+  _SeedSchedule(
+      '15:30', '16:00', 'Sholat Ashar', 'Ibadah', ScheduleModeOption.basket),
+  _SeedSchedule('16:00', '17:00', 'Aktivitas ringan / recovery', 'Istirahat',
+      ScheduleModeOption.basket),
+  _SeedSchedule('18:00', '19:00', 'Maghrib, Qur\'an ringan, makan malam',
+      'Ibadah', ScheduleModeOption.basket),
+  _SeedSchedule(
+      '19:00', '19:30', 'Sholat Isya', 'Ibadah', ScheduleModeOption.basket),
+  _SeedSchedule('19:30', '20:30', 'Review hari ini + planning besok',
+      'Planning', ScheduleModeOption.basket),
+  _SeedSchedule('20:30', '21:00', 'Persiapan tidur', 'Istirahat',
+      ScheduleModeOption.basket),
 ];

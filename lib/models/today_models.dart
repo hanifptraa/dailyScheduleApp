@@ -21,7 +21,7 @@ class TodayData {
   });
 
   final String dateKey;
-  final ScheduleModeType mode;
+  final ScheduleModeOption mode;
   final List<TodayScheduleEntry> entries;
 
   int get total => entries.length;
@@ -40,13 +40,41 @@ class HistoryDayData {
   });
 
   final String dateKey;
-  final ScheduleModeType mode;
+  final ScheduleModeOption mode;
   final int total;
   final int done;
   final List<DailyChecklist> items;
 
   int get percent => total == 0 ? 0 : ((done / total) * 100).round();
   String get status => productivityStatus(percent);
+}
+
+class TrendPoint {
+  const TrendPoint({
+    required this.dateKey,
+    required this.percent,
+    required this.done,
+    required this.total,
+  });
+
+  final String dateKey;
+  final int percent;
+  final int done;
+  final int total;
+}
+
+class CategoryPerformance {
+  const CategoryPerformance({
+    required this.category,
+    required this.done,
+    required this.total,
+  });
+
+  final String category;
+  final int done;
+  final int total;
+
+  int get percent => total == 0 ? 0 : ((done / total) * 100).round();
 }
 
 class StatisticsData {
@@ -57,6 +85,14 @@ class StatisticsData {
     required this.streak,
     required this.mostDoneCategory,
     required this.mostMissedCategory,
+    required this.totalTasks,
+    required this.completedTasks,
+    required this.completionRate,
+    required this.consistencyScore,
+    required this.bestDayLabel,
+    required this.bestDayPercent,
+    required this.trend,
+    required this.categories,
   });
 
   final int todayPercent;
@@ -65,4 +101,12 @@ class StatisticsData {
   final int streak;
   final String mostDoneCategory;
   final String mostMissedCategory;
+  final int totalTasks;
+  final int completedTasks;
+  final int completionRate;
+  final int consistencyScore;
+  final String bestDayLabel;
+  final int bestDayPercent;
+  final List<TrendPoint> trend;
+  final List<CategoryPerformance> categories;
 }

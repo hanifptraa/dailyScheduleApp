@@ -12,30 +12,51 @@ class SettingsScreen extends ConsumerWidget {
     final asyncSettings = ref.watch(settingsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text('Setelan')),
       body: asyncSettings.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) =>
-            Center(child: Text('Gagal memuat settings: $error')),
+            Center(child: Text('Gagal memuat setelan: $error')),
         data: (settings) {
           final userName = settings['userName'] ?? 'Hanif';
-          final themeMode = settings['themeMode'] ?? 'system';
+          final themeMode = settings['themeMode'] == 'dark' ? 'dark' : 'light';
           final targetSleep = settings['targetSleep'] ?? '21:00';
           final targetWake = settings['targetWake'] ?? '03:00';
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
             children: [
               Card(
-                child: ListTile(
-                  leading: const Icon(Icons.person),
-                  title: const Text('Nama user'),
-                  subtitle: Text(userName),
-                  trailing: const Icon(Icons.edit),
-                  onTap: () => _editTextSetting(context, ref,
-                      key: 'userName',
-                      title: 'Nama user',
-                      initialValue: userName),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_outline, size: 30),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Profil',
+                                style: Theme.of(context).textTheme.labelLarge),
+                            Text(userName,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w900)),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Edit nama',
+                        onPressed: () => _editTextSetting(context, ref,
+                            key: 'userName',
+                            title: 'Nama user',
+                            initialValue: userName),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -44,11 +65,10 @@ class SettingsScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(16),
                   child: DropdownButtonFormField<String>(
                     initialValue: themeMode,
-                    decoration:
-                        const InputDecoration(labelText: 'Tema aplikasi'),
+                    decoration: const InputDecoration(
+                        labelText: 'Tema aplikasi',
+                        prefixIcon: Icon(Icons.contrast_outlined)),
                     items: const [
-                      DropdownMenuItem(
-                          value: 'system', child: Text('Ikuti sistem')),
                       DropdownMenuItem(
                           value: 'light', child: Text('Light mode')),
                       DropdownMenuItem(value: 'dark', child: Text('Dark mode')),
@@ -58,6 +78,7 @@ class SettingsScreen extends ConsumerWidget {
                       await ref
                           .read(scheduleRepositoryProvider)
                           .setSetting('themeMode', value);
+                      if (!context.mounted) return;
                       refreshMainProviders(ref);
                     },
                   ),
@@ -68,17 +89,19 @@ class SettingsScreen extends ConsumerWidget {
                 child: Column(
                   children: [
                     ListTile(
-                      leading: const Icon(Icons.bedtime),
+                      leading: const Icon(Icons.bedtime_outlined),
                       title: const Text('Target tidur'),
                       subtitle: Text(targetSleep),
+                      trailing: const Icon(Icons.chevron_right),
                       onTap: () => _pickTimeSetting(context, ref,
                           key: 'targetSleep', initialValue: targetSleep),
                     ),
                     const Divider(height: 1),
                     ListTile(
-                      leading: const Icon(Icons.wb_twilight),
+                      leading: const Icon(Icons.wb_twilight_outlined),
                       title: const Text('Target bangun'),
                       subtitle: Text(targetWake),
+                      trailing: const Icon(Icons.chevron_right),
                       onTap: () => _pickTimeSetting(context, ref,
                           key: 'targetWake', initialValue: targetWake),
                     ),
@@ -93,35 +116,39 @@ class SettingsScreen extends ConsumerWidget {
                       leading: const Icon(Icons.restart_alt),
                       title: const Text('Reset jadwal ke default'),
                       subtitle: const Text(
-                          'Jadwal aktif akan diganti default. Riwayat lama tetap aman.'),
+                          'Jadwal aktif dinonaktifkan lalu default dimasukkan ulang.'),
+                      trailing: const Icon(Icons.chevron_right),
                       onTap: () => _confirmAction(
                         context,
                         title: 'Reset jadwal?',
                         message:
-                            'Semua jadwal aktif akan dinonaktifkan lalu jadwal default dimasukkan lagi.',
+                            'Semua jadwal aktif akan dinonaktifkan lalu jadwal default dimasukkan lagi. Riwayat lama tetap aman.',
                         onConfirm: () async {
                           await ref
                               .read(scheduleRepositoryProvider)
                               .resetSchedulesToDefault();
+                          if (!context.mounted) return;
                           refreshMainProviders(ref);
                         },
                       ),
                     ),
                     const Divider(height: 1),
                     ListTile(
-                      leading: const Icon(Icons.delete_sweep),
-                      title: const Text('Hapus semua data checklist'),
+                      leading: const Icon(Icons.delete_sweep_outlined),
+                      title: const Text('Hapus semua checklist'),
                       subtitle: const Text(
-                          'Riwayat progress dan mode harian akan dihapus.'),
+                          'Riwayat progress dan mode harian akan dihapus permanen.'),
+                      trailing: const Icon(Icons.chevron_right),
                       onTap: () => _confirmAction(
                         context,
                         title: 'Hapus checklist?',
                         message:
-                            'Semua data checklist dan history akan dihapus permanen dari database lokal.',
+                            'Semua data checklist dan riwayat akan dihapus permanen dari database lokal.',
                         onConfirm: () async {
                           await ref
                               .read(scheduleRepositoryProvider)
                               .clearChecklistData();
+                          if (!context.mounted) return;
                           refreshMainProviders(ref);
                         },
                       ),
@@ -170,12 +197,13 @@ class SettingsScreen extends ConsumerWidget {
     );
     controller.dispose();
 
-    if (result != null && result.isNotEmpty) {
+    if (result != null && result.isNotEmpty && context.mounted) {
       await ref.read(scheduleRepositoryProvider).setSetting(key, result);
+      if (!context.mounted) return;
       refreshMainProviders(ref);
       if (context.mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Settings disimpan')));
+            .showSnackBar(const SnackBar(content: Text('Setelan disimpan')));
       }
     }
   }
@@ -190,10 +218,11 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       initialTime: AppTimeUtils.toTimeOfDay(initialValue),
     );
-    if (result == null) return;
+    if (result == null || !context.mounted) return;
     await ref
         .read(scheduleRepositoryProvider)
         .setSetting(key, AppTimeUtils.fromTimeOfDay(result));
+    if (!context.mounted) return;
     refreshMainProviders(ref);
   }
 
@@ -218,7 +247,7 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (result == true) {
+    if (result == true && context.mounted) {
       await onConfirm();
       if (context.mounted) {
         ScaffoldMessenger.of(context)
