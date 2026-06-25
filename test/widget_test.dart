@@ -36,7 +36,12 @@ void main() {
 
     await tester.tap(find.text('Tambah'));
     await tester.pumpAndSettle();
-    expect(find.text('Tambah Jadwal'), findsOneWidget);
+    expect(find.text('Tambah Data'), findsOneWidget);
+
+    await tester.tap(find.text('Tambah Jadwal Baru'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tambah Jadwal'), findsWidgets);
+    expect(find.text('Pilih hari untuk jadwal'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();

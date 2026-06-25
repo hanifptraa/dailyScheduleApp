@@ -23,10 +23,9 @@ class ScheduleManagementScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Jadwal')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(
+        onPressed: () => _openCreateMenu(
           context,
           ref,
-          null,
           modeSuggestions: modeSuggestions,
           categorySuggestions: categorySuggestions,
         ),
@@ -115,20 +114,126 @@ class ScheduleManagementScreen extends ConsumerWidget {
           .read(scheduleRepositoryProvider)
           .softDeleteScheduleItem(item.id);
       if (!context.mounted) return;
-      refreshMainProviders(ref);
+      _refreshAfterFrame(context, ref);
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Jadwal dinonaktifkan')));
     }
   }
 
-  void _openForm(
+  void _refreshAfterFrame(BuildContext context, WidgetRef ref) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) refreshMainProviders(ref);
+    });
+  }
+
+  void _openCreateMenu(
+    BuildContext context,
+    WidgetRef ref, {
+    required List<ScheduleModeOption> modeSuggestions,
+    required List<String> categorySuggestions,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Tambah Data',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 12),
+            Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                leading: const Icon(Icons.event_available_outlined),
+                title: const Text('Tambah Hari / Mode Baru',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
+                subtitle:
+                    const Text('Buat nama hari baru tanpa membuat jadwal.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await Future<void>.delayed(Duration.zero);
+                  if (!context.mounted) return;
+                  await _createMode(context, ref);
+                },
+              ),
+            ),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.playlist_add_outlined),
+                title: const Text('Tambah Jadwal Baru',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
+                subtitle:
+                    const Text('Buat aktivitas pada mode hari yang dipilih.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  await Future<void>.delayed(Duration.zero);
+                  if (!context.mounted) return;
+                  _openForm(
+                    context,
+                    ref,
+                    null,
+                    modeSuggestions: modeSuggestions,
+                    categorySuggestions: categorySuggestions,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createMode(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tambah Mode Hari'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 30,
+          decoration: const InputDecoration(labelText: 'Nama hari/mode baru'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Tambah Mode')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || result.isEmpty || !context.mounted) return;
+    final mode = ScheduleModeOption(code: result, label: result);
+    await ref.read(scheduleRepositoryProvider).createScheduleMode(mode);
+    if (!context.mounted) return;
+    ref.read(scheduleModeFilterProvider.notifier).setMode(mode);
+    _refreshAfterFrame(context, ref);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Mode hari ditambahkan')));
+  }
+
+  Future<void> _openForm(
     BuildContext context,
     WidgetRef ref,
     ScheduleItem? item, {
     required List<ScheduleModeOption> modeSuggestions,
     required List<String> categorySuggestions,
-  }) {
-    showModalBottomSheet<void>(
+  }) async {
+    var categoryChanged = false;
+    final draft = await showModalBottomSheet<ScheduleFormDraft>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -139,35 +244,56 @@ class ScheduleManagementScreen extends ConsumerWidget {
             : ScheduleModeOption.fromCode(item.scheduleMode),
         modeSuggestions: modeSuggestions,
         categorySuggestions: categorySuggestions,
-        onSave: (draft) async {
-          final repo = ref.read(scheduleRepositoryProvider);
-          if (item == null) {
-            await repo.createScheduleItem(
-              title: draft.title,
-              description: draft.description,
-              startTime: draft.startTime,
-              endTime: draft.endTime,
-              category: draft.category,
-              mode: draft.mode,
-            );
-          } else {
-            await repo.updateScheduleItem(
-              id: item.id,
-              title: draft.title,
-              description: draft.description,
-              startTime: draft.startTime,
-              endTime: draft.endTime,
-              category: draft.category,
-              mode: draft.mode,
-              isActive: draft.isActive,
-            );
-          }
-          if (!context.mounted) return;
-          ref.read(scheduleModeFilterProvider.notifier).setMode(draft.mode);
-          refreshMainProviders(ref);
+        onDeleteCategory: (category) async {
+          await ref.read(scheduleRepositoryProvider).deleteCategory(category);
+          categoryChanged = true;
         },
       ),
     );
+
+    if (draft == null || !context.mounted) {
+      if (categoryChanged && context.mounted) _refreshAfterFrame(context, ref);
+      return;
+    }
+    final repo = ref.read(scheduleRepositoryProvider);
+    try {
+      if (item == null) {
+        await repo.createScheduleItem(
+          title: draft.title,
+          description: draft.description,
+          startTime: draft.startTime,
+          endTime: draft.endTime,
+          category: draft.category,
+          mode: draft.mode,
+        );
+      } else {
+        await repo.updateScheduleItem(
+          id: item.id,
+          title: draft.title,
+          description: draft.description,
+          startTime: draft.startTime,
+          endTime: draft.endTime,
+          category: draft.category,
+          mode: draft.mode,
+          isActive: draft.isActive,
+        );
+      }
+      if (!context.mounted) return;
+      ref.read(scheduleModeFilterProvider.notifier).setMode(draft.mode);
+      _refreshAfterFrame(context, ref);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(item == null
+              ? 'Jadwal berhasil ditambahkan'
+              : 'Jadwal berhasil diperbarui'),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan jadwal: $error')),
+      );
+    }
   }
 
   void _openModeManager(
@@ -182,12 +308,14 @@ class ScheduleManagementScreen extends ConsumerWidget {
       builder: (sheetContext) => _ModeManagerSheet(
         modes: modes,
         onRename: (mode) async {
-          await _renameMode(context, ref, mode);
           if (sheetContext.mounted) Navigator.pop(sheetContext);
+          await Future<void>.delayed(Duration.zero);
+          if (context.mounted) await _renameMode(context, ref, mode);
         },
         onDelete: (mode) async {
-          await _deleteMode(context, ref, mode, current);
           if (sheetContext.mounted) Navigator.pop(sheetContext);
+          await Future<void>.delayed(Duration.zero);
+          if (context.mounted) await _deleteMode(context, ref, mode, current);
         },
       ),
     );
@@ -225,7 +353,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
         .renameScheduleMode(oldMode: mode, newMode: newMode);
     if (!context.mounted) return;
     ref.read(scheduleModeFilterProvider.notifier).setMode(newMode);
-    refreshMainProviders(ref);
+    _refreshAfterFrame(context, ref);
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Nama hari diperbarui')));
   }
@@ -257,7 +385,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
           .read(scheduleModeFilterProvider.notifier)
           .setMode(ScheduleModeOption.regular);
     }
-    refreshMainProviders(ref);
+    _refreshAfterFrame(context, ref);
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Mode hari dihapus')));
   }
@@ -355,6 +483,7 @@ class _ModeManagerSheet extends StatelessWidget {
           const SizedBox(height: 14),
           for (final mode in modes)
             Card(
+              margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: const Icon(Icons.event_note_outlined),
                 title: Text(mode.label,
@@ -492,14 +621,14 @@ class ScheduleFormSheet extends StatefulWidget {
     required this.initialMode,
     required this.modeSuggestions,
     required this.categorySuggestions,
-    required this.onSave,
+    required this.onDeleteCategory,
   });
 
   final ScheduleItem? item;
   final ScheduleModeOption initialMode;
   final List<ScheduleModeOption> modeSuggestions;
   final List<String> categorySuggestions;
-  final Future<void> Function(ScheduleFormDraft draft) onSave;
+  final Future<void> Function(String category) onDeleteCategory;
 
   @override
   State<ScheduleFormSheet> createState() => _ScheduleFormSheetState();
@@ -515,7 +644,6 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
   late TimeOfDay _end;
   late bool _isActive;
   late final List<String> _selectedCategories;
-  bool _isSaving = false;
 
   bool get _isEdit => widget.item != null;
 
@@ -574,20 +702,32 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
                     ),
                   ),
                   IconButton(
-                      onPressed:
-                          _isSaving ? null : () => Navigator.pop(context),
+                      onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.close)),
                 ],
               ),
               const SizedBox(height: 6),
               Text(
-                'Isi bagian jadwal untuk kegiatan dan waktu. Bagian mode hari dipakai untuk membuat atau memilih nama hari seperti Hari Biasa, Hari Basket, atau nama custom lain.',
+                'Pilih hari/mode yang akan diberi jadwal, lalu isi detail kegiatannya.',
                 style: Theme.of(context)
                     .textTheme
                     .bodyMedium
                     ?.copyWith(color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 16),
+              _SectionLabel(
+                icon: Icons.event_available_outlined,
+                title: 'Pilih hari untuk jadwal',
+                subtitle: 'Pilih hari/mode yang akan diberi jadwal baru.',
+              ),
+              const SizedBox(height: 10),
+              _ModeChoiceChips(
+                modes: widget.modeSuggestions,
+                currentLabel: _modeController.text,
+                onSelected: (value) =>
+                    setState(() => _modeController.text = value),
+              ),
+              const SizedBox(height: 22),
               _SectionLabel(
                 icon: Icons.task_alt_outlined,
                 title: 'Tambah jadwal / kegiatan',
@@ -618,9 +758,7 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _isSaving
-                          ? null
-                          : () async => _pickTime(isStart: true),
+                      onPressed: () async => _pickTime(isStart: true),
                       icon: const Icon(Icons.schedule),
                       label:
                           Text('Mulai ${AppTimeUtils.fromTimeOfDay(_start)}'),
@@ -629,9 +767,7 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _isSaving
-                          ? null
-                          : () async => _pickTime(isStart: false),
+                      onPressed: () async => _pickTime(isStart: false),
                       icon: const Icon(Icons.schedule),
                       label:
                           Text('Selesai ${AppTimeUtils.fromTimeOfDay(_end)}'),
@@ -648,6 +784,7 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
               ),
               const SizedBox(height: 10),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: TextFormField(
@@ -655,77 +792,46 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
                       decoration: const InputDecoration(
                         labelText: 'Kategori custom',
                         prefixIcon: Icon(Icons.sell_outlined),
+                        counterText: '',
                       ),
                       maxLength: maxCategoryNameLength,
                     ),
                   ),
                   const SizedBox(width: 10),
-                  IconButton.filledTonal(
-                    tooltip: 'Tambah kategori custom',
-                    onPressed: _isSaving ? null : _addCustomCategory,
-                    icon: const Icon(Icons.add),
+                  SizedBox.square(
+                    dimension: 48,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Tambah kategori custom',
+                      onPressed: _addCustomCategory,
+                      icon: const Icon(Icons.add),
+                    ),
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
               _CategoryChoiceChips(
-                values: widget.categorySuggestions.take(12).toList(),
+                values: widget.categorySuggestions,
                 selected: _selectedCategories,
-                onSelected: _isSaving ? null : _toggleCategory,
+                onSelected: _toggleCategory,
+                onLongPress: _confirmDeleteCategory,
               ),
               const SizedBox(height: 18),
-              _SectionLabel(
-                icon: Icons.event_available_outlined,
-                title: 'Tambah hari / mode jadwal',
-                subtitle:
-                    'Pilih mode yang sudah ada atau ketik nama baru untuk membuat hari lain.',
-              ),
-              const SizedBox(height: 10),
-              _ModeChoiceChips(
-                modes: widget.modeSuggestions,
-                currentLabel: _modeController.text,
-                onSelected: _isSaving
-                    ? null
-                    : (value) => setState(() => _modeController.text = value),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _modeController,
-                decoration: const InputDecoration(
-                    labelText: 'Nama hari/mode custom',
-                    prefixIcon: Icon(Icons.event_available_outlined)),
-                maxLength: 30,
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Mode jadwal tidak boleh kosong'
-                    : null,
-              ),
               if (_isEdit) ...[
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Aktif'),
                   value: _isActive,
-                  onChanged: _isSaving
-                      ? null
-                      : (value) => setState(() => _isActive = value),
+                  onChanged: (value) => setState(() => _isActive = value),
                 ),
               ],
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _isSaving ? null : _save,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save),
-                  label: Text(_isSaving
-                      ? 'Menyimpan...'
-                      : _isEdit
-                          ? 'Simpan Perubahan'
-                          : 'Simpan Jadwal'),
+                  onPressed: _save,
+                  icon: const Icon(Icons.save),
+                  label: Text(_isEdit ? 'Simpan Perubahan' : 'Tambah Jadwal'),
                 ),
               ),
             ],
@@ -758,6 +864,31 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
     _categoryController.clear();
   }
 
+  Future<void> _confirmDeleteCategory(String category) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus kategori?'),
+        content: Text(
+            'Kategori "$category" akan dihapus dari daftar kategori dan jadwal yang memakainya.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal')),
+          FilledButton.tonal(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (result != true || !mounted) return;
+    await widget.onDeleteCategory(category);
+    if (!mounted) return;
+    setState(() => _selectedCategories.remove(category));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Kategori dihapus')));
+  }
+
   Future<void> _pickTime({required bool isStart}) async {
     final result = await showTimePicker(
       context: context,
@@ -784,7 +915,7 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
     return ScheduleModeOption(code: value, label: value);
   }
 
-  Future<void> _save() async {
+  void _save() {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -799,34 +930,18 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
       return;
     }
 
-    setState(() => _isSaving = true);
-    final draft = ScheduleFormDraft(
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
-      startTime: start,
-      endTime: end,
-      category: encodeCategories(_selectedCategories),
-      mode: _resolveMode(),
-      isActive: _isActive,
+    Navigator.pop(
+      context,
+      ScheduleFormDraft(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        startTime: start,
+        endTime: end,
+        category: encodeCategories(_selectedCategories),
+        mode: _resolveMode(),
+        isActive: _isActive,
+      ),
     );
-
-    try {
-      await widget.onSave(draft);
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(_isEdit
-                ? 'Jadwal berhasil diperbarui'
-                : 'Jadwal berhasil ditambahkan')),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan jadwal: $error')),
-      );
-    }
   }
 }
 
@@ -877,33 +992,88 @@ class _CategoryChoiceChips extends StatelessWidget {
     required this.values,
     required this.selected,
     required this.onSelected,
+    required this.onLongPress,
   });
+
+  static const _visibleLimit = 8;
 
   final List<String> values;
   final List<String> selected;
   final ValueChanged<String>? onSelected;
+  final ValueChanged<String>? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     if (values.isEmpty) return const SizedBox.shrink();
+    final visible = values.take(_visibleLimit).toList();
+    final hidden = values.skip(_visibleLimit).toList();
     return Wrap(
       spacing: 8,
       runSpacing: 6,
-      children: values.map((value) {
-        final isSelected = selected.contains(value);
-        return FilterChip(
-          label: Text(value),
-          selected: isSelected,
-          onSelected: onSelected == null ? null : (_) => onSelected!(value),
-          selectedColor: scheme.primaryContainer,
-          checkmarkColor: scheme.onPrimaryContainer,
-          labelStyle: TextStyle(
-            color: isSelected ? scheme.onPrimaryContainer : null,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+      children: [
+        for (final value in visible) _categoryChip(context, scheme, value),
+        if (hidden.isNotEmpty)
+          ActionChip(
+            label: Text('+${hidden.length}'),
+            avatar: const Icon(Icons.more_horiz, size: 18),
+            onPressed: () => _showAllCategories(context),
           ),
-        );
-      }).toList(),
+      ],
+    );
+  }
+
+  Widget _categoryChip(BuildContext context, ColorScheme scheme, String value) {
+    final isSelected = selected.contains(value);
+    final chip = FilterChip(
+      label: Text(value),
+      selected: isSelected,
+      onSelected: onSelected == null ? null : (_) => onSelected!(value),
+      onDeleted: null,
+      selectedColor: scheme.primaryContainer,
+      checkmarkColor: scheme.onPrimaryContainer,
+      labelStyle: TextStyle(
+        color: isSelected ? scheme.onPrimaryContainer : null,
+        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+      ),
+    );
+    if (onLongPress == null) return chip;
+    return GestureDetector(
+      onLongPress: () => onLongPress!(value),
+      child: chip,
+    );
+  }
+
+  void _showAllCategories(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Semua Kategori',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (final value in values)
+                    _categoryChip(
+                        context, Theme.of(context).colorScheme, value),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -915,30 +1085,72 @@ class _ModeChoiceChips extends StatelessWidget {
     required this.onSelected,
   });
 
+  static const _visibleLimit = 6;
+
   final List<ScheduleModeOption> modes;
   final String currentLabel;
   final ValueChanged<String>? onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final visible = modes.take(_visibleLimit).toList();
+    final hidden = modes.skip(_visibleLimit).toList();
     return Wrap(
       spacing: 8,
       runSpacing: 6,
-      children: modes.map((mode) {
-        final selected = mode.label.toLowerCase() == currentLabel.toLowerCase();
-        return ChoiceChip(
-          label: Text(mode.label),
-          selected: selected,
-          onSelected:
-              onSelected == null ? null : (_) => onSelected!(mode.label),
-          selectedColor: scheme.primaryContainer,
-          labelStyle: TextStyle(
-            color: selected ? scheme.onPrimaryContainer : null,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+      children: [
+        for (final mode in visible) _modeChip(context, mode),
+        if (hidden.isNotEmpty)
+          ActionChip(
+            label: Text('+${hidden.length}'),
+            avatar: const Icon(Icons.more_horiz, size: 18),
+            onPressed: () => _showAllModes(context),
           ),
-        );
-      }).toList(),
+      ],
+    );
+  }
+
+  Widget _modeChip(BuildContext context, ScheduleModeOption mode) {
+    final scheme = Theme.of(context).colorScheme;
+    final selected = mode.label.toLowerCase() == currentLabel.toLowerCase();
+    return ChoiceChip(
+      label: Text(mode.label),
+      selected: selected,
+      onSelected: onSelected == null ? null : (_) => onSelected!(mode.label),
+      selectedColor: scheme.primaryContainer,
+      labelStyle: TextStyle(
+        color: selected ? scheme.onPrimaryContainer : null,
+        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+      ),
+    );
+  }
+
+  void _showAllModes(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Semua Mode Hari',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [for (final mode in modes) _modeChip(context, mode)],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -63,24 +63,48 @@ class SettingsScreen extends ConsumerWidget {
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: DropdownButtonFormField<String>(
-                    initialValue: themeMode,
-                    decoration: const InputDecoration(
-                        labelText: 'Tema aplikasi',
-                        prefixIcon: Icon(Icons.contrast_outlined)),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'light', child: Text('Light mode')),
-                      DropdownMenuItem(value: 'dark', child: Text('Dark mode')),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.contrast_outlined),
+                          const SizedBox(width: 10),
+                          Text('Tema aplikasi',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(
+                              value: 'light',
+                              label: Text('Light'),
+                              icon: Icon(Icons.light_mode_outlined),
+                            ),
+                            ButtonSegment(
+                              value: 'dark',
+                              label: Text('Dark'),
+                              icon: Icon(Icons.dark_mode_outlined),
+                            ),
+                          ],
+                          selected: {themeMode},
+                          onSelectionChanged: (values) async {
+                            final value = values.first;
+                            await ref
+                                .read(scheduleRepositoryProvider)
+                                .setSetting('themeMode', value);
+                            if (!context.mounted) return;
+                            refreshMainProviders(ref);
+                          },
+                        ),
+                      ),
                     ],
-                    onChanged: (value) async {
-                      if (value == null) return;
-                      await ref
-                          .read(scheduleRepositoryProvider)
-                          .setSetting('themeMode', value);
-                      if (!context.mounted) return;
-                      refreshMainProviders(ref);
-                    },
                   ),
                 ),
               ),

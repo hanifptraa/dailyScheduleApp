@@ -260,6 +260,7 @@ class _ModePickerButton extends StatelessWidget {
                 const SizedBox(height: 12),
                 for (final item in modes)
                   Card(
+                    margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       leading: Icon(item.code == mode.code
                           ? Icons.check_circle

@@ -275,7 +275,7 @@ class _CategorySection extends StatelessWidget {
                     ?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 14),
             if (categories.isEmpty)
-              Text('Kategori akan muncul setelah kamu menyelesaikan checklist.',
+              Text('Kategori sering dipakai akan muncul setelah ada checklist.',
                   style: TextStyle(color: scheme.onSurfaceVariant))
             else
               ...categories.map((item) => Padding(
@@ -307,11 +307,12 @@ class _CategoryBar extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w800))),
-            Text('${item.percent}%  (${item.done}/${item.total})',
+            const SizedBox(width: 12),
+            Text('${item.percent}%',
                 style: Theme.of(context)
                     .textTheme
                     .labelMedium
-                    ?.copyWith(fontWeight: FontWeight.w800)),
+                    ?.copyWith(fontWeight: FontWeight.w900)),
           ],
         ),
         const SizedBox(height: 7),
@@ -348,7 +349,9 @@ class _InsightSection extends StatelessWidget {
             _InsightRow(
                 icon: Icons.emoji_events_outlined,
                 label: 'Hari terbaik',
-                value: '${stats.bestDayLabel} • ${stats.bestDayPercent}%'),
+                value: stats.bestDayLabel == '-'
+                    ? '-'
+                    : '${stats.bestDayLabel} - ${stats.bestDayPercent}%'),
             _InsightRow(
                 icon: Icons.check_circle_outline,
                 label: 'Kategori terkuat',

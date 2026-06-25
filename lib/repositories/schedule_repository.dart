@@ -96,6 +96,12 @@ class ScheduleRepository {
       if (mode.code.isNotEmpty) byCode[mode.code] = mode;
     }
 
+    for (final code
+        in _decodeCustomModes(await getSetting('customModes', ''))) {
+      final mode = ScheduleModeOption.fromCode(code);
+      if (mode.code.isNotEmpty) byCode[mode.code] = mode;
+    }
+
     final modes = byCode.values.toList()
       ..sort((a, b) {
         final aDefault = ScheduleModeOption.defaults.contains(a);
@@ -119,6 +125,35 @@ class ScheduleRepository {
     return list;
   }
 
+  List<String> _decodeCustomModes(String value) {
+    return value
+        .split('|')
+        .map(ScheduleModeOption.normalizeCustomCode)
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  Future<void> _setCustomModes(List<String> modes) async {
+    final normalized = modes
+        .map(ScheduleModeOption.normalizeCustomCode)
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    await setSetting('customModes', normalized.join('|'));
+  }
+
+  Future<void> createScheduleMode(ScheduleModeOption mode) async {
+    final normalized = ScheduleModeOption.normalizeCustomCode(mode.label);
+    if (normalized.isEmpty) return;
+    final modes = _decodeCustomModes(await getSetting('customModes', ''));
+    if (!modes.any((item) => item.toLowerCase() == normalized.toLowerCase())) {
+      modes.add(normalized);
+      await _setCustomModes(modes);
+    }
+  }
+
   Future<void> renameScheduleMode({
     required ScheduleModeOption oldMode,
     required ScheduleModeOption newMode,
@@ -127,6 +162,12 @@ class ScheduleRepository {
     if (normalized.isEmpty || normalized == oldMode.code) return;
     final target = ScheduleModeOption(code: normalized, label: normalized);
     final now = DateTime.now();
+
+    final customModes = _decodeCustomModes(await getSetting('customModes', ''));
+    final renamedModes = customModes
+        .map((item) => item == oldMode.code ? target.code : item)
+        .toList();
+    await _setCustomModes(renamedModes);
 
     await db.transaction(() async {
       await (db.update(db.scheduleItems)
@@ -151,6 +192,9 @@ class ScheduleRepository {
   }
 
   Future<void> deleteScheduleMode(ScheduleModeOption mode) async {
+    final customModes = _decodeCustomModes(await getSetting('customModes', ''))
+      ..removeWhere((item) => item == mode.code);
+    await _setCustomModes(customModes);
     final now = DateTime.now();
     await (db.update(db.scheduleItems)
           ..where((t) => t.scheduleMode.equals(mode.code)))
@@ -158,6 +202,28 @@ class ScheduleRepository {
       isActive: const Value(false),
       updatedAt: Value(now),
     ));
+  }
+
+  Future<void> deleteCategory(String category) async {
+    final target = normalizeCategoryName(category);
+    if (target.isEmpty) return;
+    final rows = await db.select(db.scheduleItems).get();
+    final now = DateTime.now();
+    for (final row in rows) {
+      final categories = parseCategories(row.category);
+      if (!categories.contains(target)) continue;
+      final remaining = categories.where((item) => item != target).toList();
+      final nextValue = remaining.isEmpty
+          ? defaultCategories.first
+          : encodeCategories(remaining);
+      await (db.update(db.scheduleItems)..where((t) => t.id.equals(row.id)))
+          .write(
+        ScheduleItemsCompanion(
+          category: Value(nextValue),
+          updatedAt: Value(now),
+        ),
+      );
+    }
   }
 
   Future<ScheduleModeOption> getDailyMode(String dateKey) async {
@@ -399,7 +465,6 @@ class ScheduleRepository {
     }
 
     final doneCategoryCount = <String, int>{};
-    final missedCategoryCount = <String, int>{};
     final totalCategoryCount = <String, int>{};
     var totalTasks = 0;
     var completedTasks = 0;
@@ -415,9 +480,6 @@ class ScheduleRepository {
           if (item.isDone) {
             doneCategoryCount[category] =
                 (doneCategoryCount[category] ?? 0) + 1;
-          } else {
-            missedCategoryCount[category] =
-                (missedCategoryCount[category] ?? 0) + 1;
           }
         }
         if (item.isDone) completedTasks++;
@@ -432,9 +494,9 @@ class ScheduleRepository {
       );
     }).toList()
       ..sort((a, b) {
-        final byPercent = b.percent.compareTo(a.percent);
-        if (byPercent != 0) return byPercent;
-        return b.total.compareTo(a.total);
+        final byTotal = b.total.compareTo(a.total);
+        if (byTotal != 0) return byTotal;
+        return b.percent.compareTo(a.percent);
       });
 
     final trend = last7.reversed.map((day) {
@@ -451,25 +513,55 @@ class ScheduleRepository {
       if (bestDay == null || day.percent > bestDay.percent) bestDay = day;
     }
 
+    final completionRate = totalTasks == 0
+        ? today.percent
+        : ((completedTasks / totalTasks) * 100).round();
+    final strongestCategory =
+        completedTasks == 0 ? '-' : _topCategory(doneCategoryCount);
+    final attentionCategory = _attentionCategory(
+      categories: categories,
+      strongestCategory: strongestCategory,
+      completionRate: completionRate,
+    );
+
     return StatisticsData(
       todayPercent: today.percent,
       last7Average: avg,
       productiveDays: productiveDays,
       streak: streak,
-      mostDoneCategory: _topCategory(doneCategoryCount),
-      mostMissedCategory: _topCategory(missedCategoryCount),
+      mostDoneCategory: strongestCategory,
+      mostMissedCategory: completedTasks == 0 ? '-' : attentionCategory,
       totalTasks: totalTasks,
       completedTasks: completedTasks,
-      completionRate: totalTasks == 0
-          ? today.percent
-          : ((completedTasks / totalTasks) * 100).round(),
+      completionRate: completionRate,
       consistencyScore: avg,
-      bestDayLabel:
-          bestDay == null ? '-' : AppDateUtils.formatDateKey(bestDay.dateKey),
-      bestDayPercent: bestDay?.percent ?? 0,
+      bestDayLabel: completedTasks == 0 || bestDay == null
+          ? '-'
+          : AppDateUtils.formatDateKey(bestDay.dateKey),
+      bestDayPercent: completedTasks == 0 ? 0 : bestDay?.percent ?? 0,
       trend: trend,
       categories: categories.take(6).toList(),
     );
+  }
+
+  String _attentionCategory({
+    required List<CategoryPerformance> categories,
+    required String strongestCategory,
+    required int completionRate,
+  }) {
+    if (completionRate < 65 || categories.isEmpty) return '-';
+    final candidates = categories
+        .where((item) =>
+            item.category != strongestCategory &&
+            item.total > 0 &&
+            item.percent < 65)
+        .toList()
+      ..sort((a, b) {
+        final byPercent = a.percent.compareTo(b.percent);
+        if (byPercent != 0) return byPercent;
+        return b.total.compareTo(a.total);
+      });
+    return candidates.isEmpty ? '-' : candidates.first.category;
   }
 
   String _topCategory(Map<String, int> data) {
