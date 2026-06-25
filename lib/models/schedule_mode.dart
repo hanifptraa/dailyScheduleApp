@@ -33,6 +33,9 @@ class ScheduleModeOption {
   int get hashCode => code.hashCode;
 }
 
+const maxCategoriesPerSchedule = 3;
+const maxCategoryNameLength = 24;
+
 const defaultCategories = <String>[
   'Persiapan',
   'Ibadah',
@@ -45,6 +48,38 @@ const defaultCategories = <String>[
   'Review',
   'Planning',
 ];
+
+List<String> parseCategories(String value) {
+  return value
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toSet()
+      .take(maxCategoriesPerSchedule)
+      .toList();
+}
+
+String normalizeCategoryName(String value) {
+  final trimmed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (trimmed.length <= maxCategoryNameLength) return trimmed;
+  return trimmed.substring(0, maxCategoryNameLength).trim();
+}
+
+String normalizeCategoryValue(String value) {
+  final parsed = parseCategories(value);
+  return encodeCategories(parsed.isEmpty ? [value] : parsed);
+}
+
+String encodeCategories(Iterable<String> categories) {
+  final normalized = <String>[];
+  for (final category in categories) {
+    final value = normalizeCategoryName(category);
+    if (value.isEmpty || normalized.contains(value)) continue;
+    normalized.add(value);
+    if (normalized.length == maxCategoriesPerSchedule) break;
+  }
+  return normalized.join(', ');
+}
 
 String productivityStatus(int percent) {
   if (percent >= 90) return 'Sangat Produktif';

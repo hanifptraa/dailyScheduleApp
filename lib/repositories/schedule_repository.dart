@@ -86,36 +86,78 @@ class ScheduleRepository {
   }
 
   Future<List<ScheduleModeOption>> getScheduleModes() async {
-    final rows = await db.select(db.scheduleItems).get();
-    final byCode = <String, ScheduleModeOption>{
-      for (final mode in ScheduleModeOption.defaults) mode.code: mode,
-    };
+    final rows = await (db.select(db.scheduleItems)
+          ..where((t) => t.isActive.equals(true)))
+        .get();
+    final byCode = <String, ScheduleModeOption>{};
 
     for (final row in rows) {
       final mode = ScheduleModeOption.fromCode(row.scheduleMode);
       if (mode.code.isNotEmpty) byCode[mode.code] = mode;
     }
 
-    final defaults = ScheduleModeOption.defaults
-        .where((mode) => byCode.containsKey(mode.code))
-        .toList();
-    final customs = byCode.values
-        .where((mode) => !ScheduleModeOption.defaults.contains(mode))
-        .toList()
-      ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
-    return [...defaults, ...customs];
+    final modes = byCode.values.toList()
+      ..sort((a, b) {
+        final aDefault = ScheduleModeOption.defaults.contains(a);
+        final bDefault = ScheduleModeOption.defaults.contains(b);
+        if (aDefault != bDefault) return aDefault ? -1 : 1;
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
+    return modes.isEmpty ? [ScheduleModeOption.regular] : modes;
   }
 
   Future<List<String>> getCategories() async {
     final rows = await db.select(db.scheduleItems).get();
     final values = <String>{...defaultCategories};
     for (final row in rows) {
-      final category = row.category.trim();
-      if (category.isNotEmpty) values.add(category);
+      for (final category in parseCategories(row.category)) {
+        values.add(category);
+      }
     }
     final list = values.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return list;
+  }
+
+  Future<void> renameScheduleMode({
+    required ScheduleModeOption oldMode,
+    required ScheduleModeOption newMode,
+  }) async {
+    final normalized = ScheduleModeOption.normalizeCustomCode(newMode.label);
+    if (normalized.isEmpty || normalized == oldMode.code) return;
+    final target = ScheduleModeOption(code: normalized, label: normalized);
+    final now = DateTime.now();
+
+    await db.transaction(() async {
+      await (db.update(db.scheduleItems)
+            ..where((t) => t.scheduleMode.equals(oldMode.code)))
+          .write(ScheduleItemsCompanion(
+        scheduleMode: Value(target.code),
+        updatedAt: Value(now),
+      ));
+      await (db.update(db.dailyModes)
+            ..where((t) => t.scheduleMode.equals(oldMode.code)))
+          .write(DailyModesCompanion(
+        scheduleMode: Value(target.code),
+        updatedAt: Value(now),
+      ));
+      await (db.update(db.dailyChecklists)
+            ..where((t) => t.scheduleMode.equals(oldMode.code)))
+          .write(DailyChecklistsCompanion(
+        scheduleMode: Value(target.code),
+        updatedAt: Value(now),
+      ));
+    });
+  }
+
+  Future<void> deleteScheduleMode(ScheduleModeOption mode) async {
+    final now = DateTime.now();
+    await (db.update(db.scheduleItems)
+          ..where((t) => t.scheduleMode.equals(mode.code)))
+        .write(ScheduleItemsCompanion(
+      isActive: const Value(false),
+      updatedAt: Value(now),
+    ));
   }
 
   Future<ScheduleModeOption> getDailyMode(String dateKey) async {
@@ -258,7 +300,7 @@ class ScheduleRepository {
                 : description.trim()),
             startTime: startTime,
             endTime: endTime,
-            category: category.trim(),
+            category: normalizeCategoryValue(category),
             scheduleMode: mode.code,
             isActive: const Value(true),
             createdAt: Value(now),
@@ -285,7 +327,7 @@ class ScheduleRepository {
             : description.trim()),
         startTime: Value(startTime),
         endTime: Value(endTime),
-        category: Value(category.trim()),
+        category: Value(normalizeCategoryValue(category)),
         scheduleMode: Value(mode.code),
         isActive: Value(isActive),
         updatedAt: Value(DateTime.now()),
@@ -365,16 +407,20 @@ class ScheduleRepository {
     for (final day in history) {
       for (final item in day.items) {
         totalTasks++;
-        totalCategoryCount[item.snapshotCategory] =
-            (totalCategoryCount[item.snapshotCategory] ?? 0) + 1;
-        if (item.isDone) {
-          completedTasks++;
-          doneCategoryCount[item.snapshotCategory] =
-              (doneCategoryCount[item.snapshotCategory] ?? 0) + 1;
-        } else {
-          missedCategoryCount[item.snapshotCategory] =
-              (missedCategoryCount[item.snapshotCategory] ?? 0) + 1;
+        final itemCategories = parseCategories(item.snapshotCategory);
+        final categories = itemCategories.isEmpty ? ['-'] : itemCategories;
+        for (final category in categories) {
+          totalCategoryCount[category] =
+              (totalCategoryCount[category] ?? 0) + 1;
+          if (item.isDone) {
+            doneCategoryCount[category] =
+                (doneCategoryCount[category] ?? 0) + 1;
+          } else {
+            missedCategoryCount[category] =
+                (missedCategoryCount[category] ?? 0) + 1;
+          }
         }
+        if (item.isDone) completedTasks++;
       }
     }
 

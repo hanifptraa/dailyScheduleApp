@@ -214,22 +214,79 @@ class _ProgressCard extends StatelessWidget {
             Text('$done dari $total kegiatan selesai',
                 style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: mode.code,
-              decoration: const InputDecoration(
-                labelText: 'Mode hari ini',
-                prefixIcon: Icon(Icons.event_available_outlined),
-              ),
-              items: allModes
-                  .map((item) => DropdownMenuItem(
-                      value: item.code, child: Text(item.label)))
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                onModeChanged(
-                    allModes.firstWhere((item) => item.code == value));
-              },
+            _ModePickerButton(
+              mode: mode,
+              modes: allModes,
+              onChanged: onModeChanged,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModePickerButton extends StatelessWidget {
+  const _ModePickerButton({
+    required this.mode,
+    required this.modes,
+    required this.onChanged,
+  });
+
+  final ScheduleModeOption mode;
+  final List<ScheduleModeOption> modes;
+  final ValueChanged<ScheduleModeOption> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () async {
+        final result = await showModalBottomSheet<ScheduleModeOption>(
+          context: context,
+          useSafeArea: true,
+          builder: (context) => Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Pilih Mode Hari',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 12),
+                for (final item in modes)
+                  Card(
+                    child: ListTile(
+                      leading: Icon(item.code == mode.code
+                          ? Icons.check_circle
+                          : Icons.event_note_outlined),
+                      title: Text(item.label,
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                      onTap: () => Navigator.pop(context, item),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+        if (result != null) onChanged(result);
+      },
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Mode hari ini',
+          prefixIcon: Icon(Icons.event_available_outlined),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(mode.label,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
+            ),
+            Icon(Icons.expand_more, color: scheme.onSurfaceVariant),
           ],
         ),
       ),
@@ -284,7 +341,7 @@ class _TodayScheduleCard extends StatelessWidget {
                               .labelLarge
                               ?.copyWith(fontWeight: FontWeight.w900),
                         ),
-                        CategoryBadge(label: category),
+                        CategoryBadges(value: category),
                       ],
                     ),
                     const SizedBox(height: 8),

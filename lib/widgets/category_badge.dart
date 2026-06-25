@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/schedule_mode.dart';
+
 class CategoryBadge extends StatelessWidget {
   const CategoryBadge({super.key, required this.label});
 
@@ -33,6 +35,25 @@ class CategoryBadge extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
       ),
+    );
+  }
+}
+
+class CategoryBadges extends StatelessWidget {
+  const CategoryBadges({super.key, required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = parseCategories(value);
+    if (categories.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final category in categories) CategoryBadge(label: category),
+      ],
     );
   }
 }

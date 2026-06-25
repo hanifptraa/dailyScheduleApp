@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/app_providers.dart';
 import '../../utils/date_utils.dart';
+import '../../widgets/category_badge.dart';
 import '../../widgets/empty_state.dart';
 
 class HistoryScreen extends ConsumerWidget {
@@ -68,8 +69,18 @@ class HistoryScreen extends ConsumerWidget {
                             title: Text(item.snapshotTitle,
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w700)),
-                            subtitle: Text(
-                                '${item.snapshotStartTime} - ${item.snapshotEndTime} • ${item.snapshotCategory}'),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                      '${item.snapshotStartTime} - ${item.snapshotEndTime}'),
+                                  const SizedBox(height: 6),
+                                  CategoryBadges(value: item.snapshotCategory),
+                                ],
+                              ),
+                            ),
                           ),
                       ],
                     ),
