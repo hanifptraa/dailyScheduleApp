@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'providers/app_providers.dart';
+import 'screens/intro/animated_intro_screen.dart';
 import 'screens/history/history_screen.dart';
 import 'screens/schedule_management/schedule_management_screen.dart';
 import 'screens/settings/settings_screen.dart';
@@ -13,11 +14,13 @@ import 'tutorial/guided_tutorial_overlay.dart';
 import 'tutorial/tutorial_keys.dart';
 
 class DailyScheduleApp extends ConsumerWidget {
-  const DailyScheduleApp({super.key});
+  const DailyScheduleApp({super.key, this.initialThemeMode = ThemeMode.light});
+
+  final ThemeMode initialThemeMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.light;
+    final themeMode = ref.watch(themeModeProvider).value ?? initialThemeMode;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -25,7 +28,36 @@ class DailyScheduleApp extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
-      home: const AppShell(),
+      home: const AnimatedIntroGate(),
+    );
+  }
+}
+
+class AnimatedIntroGate extends StatefulWidget {
+  const AnimatedIntroGate({super.key});
+
+  @override
+  State<AnimatedIntroGate> createState() => _AnimatedIntroGateState();
+}
+
+class _AnimatedIntroGateState extends State<AnimatedIntroGate> {
+  var _showIntro = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 420),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: _showIntro
+          ? AnimatedIntroScreen(
+              key: const ValueKey('animated-intro'),
+              onFinished: () {
+                if (!mounted) return;
+                setState(() => _showIntro = false);
+              },
+            )
+          : const AppShell(key: ValueKey('app-shell')),
     );
   }
 }

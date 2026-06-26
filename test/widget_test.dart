@@ -39,6 +39,32 @@ void main() {
     expect(stats.mostMissedCategory, 'Tidak ada, pertahankan');
   });
 
+  testWidgets('Animated intro appears before main app', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = ScheduleRepository(database);
+    await repository.seedDefaultDataIfNeeded();
+    await repository.completeGuidedTutorial();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const DailyScheduleApp(),
+      ),
+    );
+
+    expect(find.text('Daily Schedule'), findsOneWidget);
+    expect(find.text('Atur hari. Jaga disiplin.'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 6200));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Hari Ini'), findsWidgets);
+    expect(find.text('Atur hari. Jaga disiplin.'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('Guided tutorial prompt can start, advance, and skip safely',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 1800));
@@ -209,7 +235,7 @@ void main() {
 Future<void> _pumpUntilFound(
   WidgetTester tester,
   Finder finder, {
-  int maxPumps = 20,
+  int maxPumps = 100,
 }) async {
   for (var i = 0; i < maxPumps; i++) {
     await tester.pump(const Duration(milliseconds: 100));

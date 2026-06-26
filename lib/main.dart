@@ -15,13 +15,17 @@ Future<void> main() async {
   await NotificationService.instance.initialize();
   await NotificationService.instance.requestNotificationPermission();
   await NotificationService.instance.rescheduleTodayNotifications(repository);
+  final initialThemeMode =
+      await repository.getSetting('themeMode', 'light') == 'dark'
+          ? ThemeMode.dark
+          : ThemeMode.light;
 
   runApp(
     ProviderScope(
       overrides: [
         databaseProvider.overrideWithValue(database),
       ],
-      child: const DailyScheduleApp(),
+      child: DailyScheduleApp(initialThemeMode: initialThemeMode),
     ),
   );
 }
