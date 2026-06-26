@@ -1,17 +1,31 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../database/app_database.dart';
 import '../../models/schedule_mode.dart';
 import '../../providers/app_providers.dart';
+import '../../tutorial/tutorial_keys.dart';
 import '../../utils/date_utils.dart';
 import '../../widgets/category_badge.dart';
 import '../../widgets/empty_state.dart';
 
-class TodayScreen extends ConsumerWidget {
+class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends ConsumerState<TodayScreen> {
+  final Map<int, bool> _optimisticChecklist = {};
+  final Map<int, int> _checklistWriteVersions = {};
+  String? _activeDateKey;
+  ScheduleModeOption? _activeMode;
+
+  @override
+  Widget build(BuildContext context) {
     final asyncToday = ref.watch(todayDataProvider);
     final asyncModes = ref.watch(scheduleModesProvider);
     final dateText = AppDateUtils.formatFull(DateTime.now());
@@ -32,6 +46,30 @@ class TodayScreen extends ConsumerWidget {
         error: (error, stack) =>
             Center(child: Text('Gagal memuat jadwal: $error')),
         data: (data) {
+          if (_activeDateKey != data.dateKey ||
+              _activeMode?.code != data.mode.code) {
+            _optimisticChecklist.clear();
+            _checklistWriteVersions.clear();
+            _activeDateKey = data.dateKey;
+            _activeMode = data.mode;
+          }
+
+          for (final entry in data.entries) {
+            final optimisticValue = _optimisticChecklist[entry.item.id];
+            if (optimisticValue != null && optimisticValue == entry.isDone) {
+              _optimisticChecklist.remove(entry.item.id);
+              _checklistWriteVersions.remove(entry.item.id);
+            }
+          }
+
+          final displayDone = data.entries.where((entry) {
+            return _optimisticChecklist[entry.item.id] ?? entry.isDone;
+          }).length;
+          final displayTotal = data.total;
+          final displayProgress =
+              displayTotal == 0 ? 0.0 : displayDone / displayTotal;
+          final displayPercent =
+              displayTotal == 0 ? 0 : (displayProgress * 100).round();
           final modes = asyncModes.value ?? ScheduleModeOption.defaults;
           return RefreshIndicator(
             onRefresh: () async => refreshMainProviders(ref),
@@ -40,21 +78,24 @@ class TodayScreen extends ConsumerWidget {
               children: [
                 _ProgressCard(
                   dateText: dateText,
-                  done: data.done,
-                  total: data.total,
-                  percent: data.percent,
-                  progress: data.progress,
+                  done: displayDone,
+                  total: displayTotal,
+                  percent: displayPercent,
+                  progress: displayProgress,
                   mode: data.mode,
                   modes: modes,
                   onModeChanged: (mode) async {
                     final key = AppDateUtils.dateKey(DateTime.now());
                     final repository = ref.read(scheduleRepositoryProvider);
                     await repository.setDailyMode(key, mode);
-                    await ref
+                    unawaited(ref
                         .read(notificationServiceProvider)
-                        .rescheduleTodayNotifications(repository);
+                        .rescheduleTodayNotifications(repository));
                     if (!context.mounted) return;
-                    refreshMainProviders(ref);
+                    ref.invalidate(todayDataProvider);
+                    ref.invalidate(todayModeProvider);
+                    ref.invalidate(historyProvider);
+                    ref.invalidate(statisticsProvider);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Mode hari ini: ${mode.label}')),
@@ -95,35 +136,98 @@ class TodayScreen extends ConsumerWidget {
                     ),
                   )
                 else
-                  ...data.entries.map((entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _TodayScheduleCard(
-                          title: entry.item.title,
-                          time:
-                              '${entry.item.startTime} - ${entry.item.endTime}',
-                          category: entry.item.category,
-                          description: entry.item.description,
-                          isDone: entry.isDone,
-                          onChanged: (value) async {
-                            await ref
-                                .read(scheduleRepositoryProvider)
-                                .setChecklistDone(
-                                  dateKey: data.dateKey,
-                                  mode: data.mode,
-                                  item: entry.item,
-                                  isDone: value ?? false,
-                                );
-                            if (!context.mounted) return;
-                            refreshMainProviders(ref);
-                          },
+                  ...data.entries.asMap().entries.map((entry) {
+                    final scheduleEntry = entry.value;
+                    return Padding(
+                      key: entry.key == 0 ? TutorialKeys.todayAgenda : null,
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _TodayScheduleCard(
+                        title: scheduleEntry.item.title,
+                        time:
+                            '${scheduleEntry.item.startTime} - ${scheduleEntry.item.endTime}',
+                        category: scheduleEntry.item.category,
+                        description: scheduleEntry.item.description,
+                        isDone: _optimisticChecklist[scheduleEntry.item.id] ??
+                            scheduleEntry.isDone,
+                        onChanged: (value) => _toggleChecklist(
+                          dateKey: data.dateKey,
+                          mode: data.mode,
+                          item: scheduleEntry.item,
+                          previousValue:
+                              _optimisticChecklist[scheduleEntry.item.id] ??
+                                  scheduleEntry.isDone,
+                          nextValue: value ?? false,
                         ),
-                      )),
+                      ),
+                    );
+                  }),
               ],
             ),
           );
         },
       ),
     );
+  }
+
+  void _toggleChecklist({
+    required String dateKey,
+    required ScheduleModeOption mode,
+    required ScheduleItem item,
+    required bool previousValue,
+    required bool nextValue,
+  }) {
+    if (previousValue == nextValue) return;
+
+    final version = (_checklistWriteVersions[item.id] ?? 0) + 1;
+    _checklistWriteVersions[item.id] = version;
+    setState(() => _optimisticChecklist[item.id] = nextValue);
+
+    unawaited(_saveChecklistChange(
+      dateKey: dateKey,
+      mode: mode,
+      item: item,
+      previousValue: previousValue,
+      nextValue: nextValue,
+      version: version,
+    ));
+  }
+
+  Future<void> _saveChecklistChange({
+    required String dateKey,
+    required ScheduleModeOption mode,
+    required ScheduleItem item,
+    required bool previousValue,
+    required bool nextValue,
+    required int version,
+  }) async {
+    try {
+      await ref.read(scheduleRepositoryProvider).setChecklistDone(
+            dateKey: dateKey,
+            mode: mode,
+            item: item,
+            isDone: nextValue,
+          );
+      if (!mounted) return;
+      if (_checklistWriteVersions[item.id] != version) {
+        final latestValue = _optimisticChecklist[item.id] ?? nextValue;
+        await ref.read(scheduleRepositoryProvider).setChecklistDone(
+              dateKey: dateKey,
+              mode: mode,
+              item: item,
+              isDone: latestValue,
+            );
+      }
+      if (!mounted) return;
+      ref.invalidate(todayDataProvider);
+      ref.invalidate(historyProvider);
+      ref.invalidate(statisticsProvider);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _optimisticChecklist[item.id] = previousValue);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Checklist belum bisa disimpan')),
+      );
+    }
   }
 }
 
@@ -157,6 +261,7 @@ class _ProgressCard extends StatelessWidget {
     ];
 
     return Card(
+      key: TutorialKeys.todayProgress,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
@@ -243,6 +348,7 @@ class _ModePickerButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
+      key: TutorialKeys.todayModePicker,
       borderRadius: BorderRadius.circular(8),
       onTap: () async {
         final result = await showModalBottomSheet<ScheduleModeOption>(

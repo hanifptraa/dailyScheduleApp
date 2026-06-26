@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../database/app_database.dart';
 import '../../models/schedule_mode.dart';
 import '../../providers/app_providers.dart';
+import '../../tutorial/tutorial_keys.dart';
 import '../../utils/time_utils.dart';
 import '../../widgets/category_badge.dart';
 import '../../widgets/empty_state.dart';
@@ -25,6 +26,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Jadwal')),
       floatingActionButton: FloatingActionButton.extended(
+        key: TutorialKeys.scheduleAddButton,
         onPressed: () => _openCreateMenu(
           context,
           ref,
@@ -69,9 +71,12 @@ class ScheduleManagementScreen extends ConsumerWidget {
                   itemBuilder: (context, index) {
                     final item = items[index];
                     return Padding(
+                      key: index == 0 ? TutorialKeys.scheduleCard : null,
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _ScheduleItemCard(
                         item: item,
+                        menuKey:
+                            index == 0 ? TutorialKeys.scheduleCardMenu : null,
                         onEdit: () => _openForm(
                           context,
                           ref,
@@ -473,6 +478,7 @@ class _ModeFilterBar extends StatelessWidget {
     ];
 
     return Padding(
+      key: TutorialKeys.scheduleModeFilter,
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Row(
         children: [
@@ -500,6 +506,7 @@ class _ModeFilterBar extends StatelessWidget {
             ),
           ),
           IconButton.filledTonal(
+            key: TutorialKeys.scheduleModeManageButton,
             tooltip: 'Kelola mode hari',
             onPressed: onManage,
             icon: const Icon(Icons.edit_calendar_outlined),
@@ -573,12 +580,17 @@ class _ModeManagerSheet extends StatelessWidget {
 }
 
 class _ScheduleItemCard extends StatelessWidget {
-  const _ScheduleItemCard(
-      {required this.item, required this.onEdit, required this.onDelete});
+  const _ScheduleItemCard({
+    required this.item,
+    required this.onEdit,
+    required this.onDelete,
+    this.menuKey,
+  });
 
   final ScheduleItem item;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final Key? menuKey;
 
   @override
   Widget build(BuildContext context) {
@@ -639,6 +651,7 @@ class _ScheduleItemCard extends StatelessWidget {
               ),
             ),
             PopupMenuButton<String>(
+              key: menuKey,
               onSelected: (value) {
                 if (value == 'edit') onEdit();
                 if (value == 'delete') onDelete();
@@ -713,6 +726,7 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
   late bool _enableNotification;
   late List<ScheduleModeOption> _availableModes;
   late final List<String> _selectedCategories;
+  String? _formMessage;
 
   bool get _isEdit => widget.item != null;
 
@@ -930,16 +944,24 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
                 ),
               ),
               const SizedBox(height: 18),
-              if (_isEdit) ...[
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Aktif'),
-                  value: _isActive,
-                  onChanged: (value) => setState(() => _isActive = value),
+              if (_formMessage != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: scheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _formMessage!,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onErrorContainer,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
                 ),
+                const SizedBox(height: 12),
               ],
-              const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -958,24 +980,50 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
   void _toggleCategory(String value) {
     final category = normalizeCategoryName(value);
     if (category.isEmpty) return;
+    if (!_selectedCategories.contains(category) &&
+        _selectedCategories.length >= maxCategoriesPerSchedule) {
+      _showFormMessage(
+          'Maksimal $maxCategoriesPerSchedule kategori per jadwal');
+      return;
+    }
+
     setState(() {
+      _formMessage = null;
       if (_selectedCategories.contains(category)) {
         _selectedCategories.remove(category);
-      } else if (_selectedCategories.length < maxCategoriesPerSchedule) {
-        _selectedCategories.add(category);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                'Maksimal $maxCategoriesPerSchedule kategori per jadwal')));
+        _selectedCategories.add(category);
       }
     });
   }
 
   void _addCustomCategory() {
     final category = normalizeCategoryName(_categoryController.text);
-    if (category.isEmpty) return;
-    _toggleCategory(category);
-    _categoryController.clear();
+    if (category.isEmpty) {
+      _showFormMessage('Ketik nama kategori custom terlebih dahulu');
+      return;
+    }
+    if (!_selectedCategories.contains(category) &&
+        _selectedCategories.length >= maxCategoriesPerSchedule) {
+      _showFormMessage(
+          'Maksimal $maxCategoriesPerSchedule kategori per jadwal');
+      return;
+    }
+    setState(() {
+      _formMessage = null;
+      if (!_selectedCategories.contains(category)) {
+        _selectedCategories.add(category);
+      }
+      _categoryController.clear();
+    });
+  }
+
+  void _showFormMessage(String message) {
+    setState(() => _formMessage = message);
+    Future.delayed(const Duration(seconds: 4), () {
+      if (!mounted || _formMessage != message) return;
+      setState(() => _formMessage = null);
+    });
   }
 
   Future<void> _confirmDeleteMode(ScheduleModeOption mode) async {
@@ -1071,15 +1119,13 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCategories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pilih minimal satu kategori')));
+      _showFormMessage('Pilih minimal satu kategori');
       return;
     }
     final start = AppTimeUtils.fromTimeOfDay(_start);
     final end = AppTimeUtils.fromTimeOfDay(_end);
     if (!AppTimeUtils.isValidRange(start, end)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Jam mulai tidak boleh lebih besar dari jam selesai')));
+      _showFormMessage('Jam mulai tidak boleh lebih besar dari jam selesai');
       return;
     }
 
@@ -1160,9 +1206,13 @@ class _CategoryChoiceChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (values.isEmpty) return const SizedBox.shrink();
-    final visible = values.take(_visibleLimit).toList();
-    final hidden = values.skip(_visibleLimit).toList();
+    final orderedValues = [
+      ...selected,
+      ...values.where((value) => !selected.contains(value)),
+    ];
+    if (orderedValues.isEmpty) return const SizedBox.shrink();
+    final visible = orderedValues.take(_visibleLimit).toList();
+    final hidden = orderedValues.skip(_visibleLimit).toList();
     return Wrap(
       spacing: 8,
       runSpacing: 6,
@@ -1217,6 +1267,13 @@ class _CategoryChoiceChips extends StatelessWidget {
                         .textTheme
                         .headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 6),
+                Text(
+                  'Tekan tahan kategori custom untuk menghapusnya.',
+                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,

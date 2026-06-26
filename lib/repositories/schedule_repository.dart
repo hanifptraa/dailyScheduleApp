@@ -23,8 +23,7 @@ class ScheduleRepository {
 
     await db.batch((batch) {
       batch.insertAll(db.scheduleItems, [
-        ..._regularDefaults.map(_toCompanion),
-        ..._basketDefaults.map(_toCompanion),
+        ..._exampleDefaults.map(_toCompanion),
       ]);
     });
   }
@@ -62,6 +61,18 @@ class ScheduleRepository {
   Future<Map<String, String>> getSettings() async {
     final rows = await db.select(db.appSettings).get();
     return {for (final row in rows) row.key: row.value};
+  }
+
+  Future<bool> isGuidedTutorialCompleted() async {
+    return await getSetting('guidedTutorialCompleted', 'false') == 'true';
+  }
+
+  Future<void> completeGuidedTutorial() async {
+    await setSetting('guidedTutorialCompleted', 'true');
+  }
+
+  Future<void> resetGuidedTutorial() async {
+    await setSetting('guidedTutorialCompleted', 'false');
   }
 
   Future<void> setSetting(String key, String value) async {
@@ -333,8 +344,23 @@ class ScheduleRepository {
     required ScheduleItem item,
     required bool isDone,
   }) async {
-    await ensureChecklistRowsForDate(dateKey, mode);
     final now = DateTime.now();
+    final updated = await (db.update(db.dailyChecklists)
+          ..where((t) =>
+              t.date.equals(dateKey) &
+              t.scheduleMode.equals(mode.code) &
+              t.scheduleItemId.equals(item.id)))
+        .write(
+      DailyChecklistsCompanion(
+        isDone: Value(isDone),
+        completedAt: Value(isDone ? now : null),
+        updatedAt: Value(now),
+      ),
+    );
+
+    if (updated > 0) return;
+
+    await ensureChecklistRowsForDate(dateKey, mode);
     await (db.update(db.dailyChecklists)
           ..where((t) =>
               t.date.equals(dateKey) &
@@ -562,19 +588,31 @@ class ScheduleRepository {
     required String strongestCategory,
     required int completionRate,
   }) {
-    if (completionRate < 65 || categories.isEmpty) return '-';
+    if (categories.isEmpty) return '-';
+    if (completionRate >= 90 &&
+        categories.every((item) => item.total > 0 && item.percent >= 90)) {
+      return 'Tidak ada, pertahankan';
+    }
+
     final candidates = categories
         .where((item) =>
             item.category != strongestCategory &&
             item.total > 0 &&
-            item.percent < 65)
-        .toList()
-      ..sort((a, b) {
-        final byPercent = a.percent.compareTo(b.percent);
-        if (byPercent != 0) return byPercent;
-        return b.total.compareTo(a.total);
-      });
-    return candidates.isEmpty ? '-' : candidates.first.category;
+            item.percent < 70)
+        .toList();
+
+    final fallbackCandidates = candidates.isEmpty
+        ? categories.where((item) => item.total > 0).toList()
+        : candidates;
+
+    fallbackCandidates.sort((a, b) {
+      final byPercent = a.percent.compareTo(b.percent);
+      if (byPercent != 0) return byPercent;
+      return b.total.compareTo(a.total);
+    });
+
+    if (fallbackCandidates.isEmpty) return '-';
+    return fallbackCandidates.first.category;
   }
 
   String _topCategory(Map<String, int> data) {
@@ -592,8 +630,7 @@ class ScheduleRepository {
     );
     await db.batch((batch) {
       batch.insertAll(db.scheduleItems, [
-        ..._regularDefaults.map(_toCompanion),
-        ..._basketDefaults.map(_toCompanion),
+        ..._exampleDefaults.map(_toCompanion),
       ]);
     });
   }
@@ -639,82 +676,83 @@ class _SeedSchedule {
   final ScheduleModeOption mode;
 }
 
-const _regularDefaults = [
-  _SeedSchedule('03:00', '03:15', 'Bangun, wudhu, minum air', 'Persiapan',
-      ScheduleModeOption.regular),
-  _SeedSchedule('03:15', '04:15', 'Sholat Tahajud + Dzikir', 'Ibadah',
-      ScheduleModeOption.regular),
-  _SeedSchedule('04:15', '05:00', 'Baca Qur\'an sampai Subuh', 'Ibadah',
-      ScheduleModeOption.regular),
-  _SeedSchedule('05:00', '07:00', 'Belajar Basic PHP/Laravel', 'Coding',
-      ScheduleModeOption.regular),
+const _exampleDefaults = [
   _SeedSchedule(
-      '07:00', '07:30', 'Sholat Dhuha', 'Ibadah', ScheduleModeOption.regular),
-  _SeedSchedule('07:30', '08:00', 'Sarapan, mandi, beres kamar', 'Rutinitas',
+      '03:00',
+      '03:15',
+      'Bangun pagi, rapikan tempat tidur, minum air',
+      'Persiapan',
       ScheduleModeOption.regular),
-  _SeedSchedule('08:00', '10:00', 'Project / Roblox Studio', 'Project',
+  _SeedSchedule('03:15', '03:30', 'Wudhu dan persiapan tahajjud', 'Persiapan',
       ScheduleModeOption.regular),
-  _SeedSchedule('10:00', '10:45', 'Workout tipis / Ball Handling Basket',
-      'Olahraga', ScheduleModeOption.regular),
-  _SeedSchedule('10:45', '11:15', 'Pendinginan, mandi, siap Dzuhur',
+  _SeedSchedule('03:30', '04:05', 'Sholat tahajjud dan doa pribadi', 'Ibadah',
+      ScheduleModeOption.regular),
+  _SeedSchedule('04:05', '04:35', 'Baca Qur\'an, hafalan pendek, dan dzikir',
+      'Ibadah', ScheduleModeOption.regular),
+  _SeedSchedule('04:35', '05:10', 'Sholat Subuh berjamaah / tepat waktu',
+      'Ibadah', ScheduleModeOption.regular),
+  _SeedSchedule(
+      '05:10',
+      '06:15',
+      'Olahraga pagi: jalan, jogging, atau stretching',
+      'Olahraga',
+      ScheduleModeOption.regular),
+  _SeedSchedule('06:15', '06:45', 'Pulang, pendinginan, dan istirahat ringan',
+      'Istirahat, Rutinitas', ScheduleModeOption.regular),
+  _SeedSchedule('06:45', '07:30', 'Mandi, sarapan, dan persiapan belajar',
       'Rutinitas', ScheduleModeOption.regular),
-  _SeedSchedule('12:00', '12:30', 'Sholat Dzuhur + Sunnah Qobliyah/Ba\'diyah',
+  _SeedSchedule(
+      '07:30',
+      '09:30',
+      'Belajar fokus: pelajaran utama / tugas sekolah',
+      'Kerja / Belajar',
+      ScheduleModeOption.regular),
+  _SeedSchedule('09:30', '10:00', 'Istirahat singkat dan sholat Dhuha',
       'Ibadah', ScheduleModeOption.regular),
   _SeedSchedule(
-      '12:30', '13:00', 'Makan siang', 'Rutinitas', ScheduleModeOption.regular),
+      '10:00',
+      '11:45',
+      'Lanjut belajar: latihan soal dan catatan ringkas',
+      'Kerja / Belajar',
+      ScheduleModeOption.regular),
+  _SeedSchedule('11:45', '12:30', 'Sholat Dzuhur dan makan siang', 'Ibadah',
+      ScheduleModeOption.regular),
+  _SeedSchedule('12:30', '13:15', 'Tidur siang / istirahat agar tetap segar',
+      'Istirahat', ScheduleModeOption.regular),
   _SeedSchedule(
-      '13:00', '14:15', 'Tidur siang', 'Istirahat', ScheduleModeOption.regular),
-  _SeedSchedule('14:15', '15:15', 'Konten / Digital Skill', 'Digital Skill',
+      '13:15',
+      '15:00',
+      'Review materi, mengerjakan PR, atau project kecil',
+      'Kerja / Belajar, Project',
       ScheduleModeOption.regular),
-  _SeedSchedule('15:30', '16:00', 'Sholat Ashar + dzikir pendek', 'Ibadah',
+  _SeedSchedule('15:00', '15:35', 'Sholat Ashar dan dzikir sore', 'Ibadah',
       ScheduleModeOption.regular),
-  _SeedSchedule('16:00', '17:15', 'Review project / aktivitas ringan', 'Review',
+  _SeedSchedule(
+      '15:35',
+      '17:00',
+      'Bantu orang tua, beres kamar, atau aktivitas rumah',
+      'Rutinitas',
       ScheduleModeOption.regular),
-  _SeedSchedule('18:00', '19:00', 'Maghrib, Qur\'an ringan, makan malam',
-      'Ibadah', ScheduleModeOption.regular),
+  _SeedSchedule('17:00', '17:45', 'Murajaah hafalan / baca buku ringan',
+      'Ibadah, Kerja / Belajar', ScheduleModeOption.regular),
+  _SeedSchedule(
+      '18:00',
+      '19:00',
+      'Sholat Maghrib, tilawah ringan, dan makan malam',
+      'Ibadah',
+      ScheduleModeOption.regular),
   _SeedSchedule(
       '19:00', '19:30', 'Sholat Isya', 'Ibadah', ScheduleModeOption.regular),
-  _SeedSchedule('19:30', '20:30', 'Review hari ini + planning besok',
-      'Planning', ScheduleModeOption.regular),
-  _SeedSchedule('20:30', '21:00', 'Persiapan tidur', 'Istirahat',
+  _SeedSchedule(
+      '19:30',
+      '20:30',
+      'Review pelajaran hari ini dan siapkan agenda besok',
+      'Review, Planning',
       ScheduleModeOption.regular),
-];
-
-const _basketDefaults = [
-  _SeedSchedule('03:00', '03:15', 'Bangun, wudhu, minum air', 'Persiapan',
-      ScheduleModeOption.basket),
-  _SeedSchedule('03:15', '04:15', 'Sholat Tahajud + Dzikir', 'Ibadah',
-      ScheduleModeOption.basket),
-  _SeedSchedule('04:15', '05:00', 'Baca Qur\'an sampai Subuh', 'Ibadah',
-      ScheduleModeOption.basket),
-  _SeedSchedule('05:00', '05:40', 'Review Laravel ringan', 'Coding',
-      ScheduleModeOption.basket),
-  _SeedSchedule('05:40', '06:00', 'Persiapan basket', 'Olahraga',
-      ScheduleModeOption.basket),
   _SeedSchedule(
-      '06:00', '08:30', 'Basket', 'Olahraga', ScheduleModeOption.basket),
-  _SeedSchedule('08:30', '09:30', 'Pulang, mandi, sarapan', 'Rutinitas',
-      ScheduleModeOption.basket),
-  _SeedSchedule(
-      '09:30', '11:00', 'Project ringan', 'Project', ScheduleModeOption.basket),
-  _SeedSchedule('12:00', '12:30', 'Sholat Dzuhur + Sunnah Qobliyah/Ba\'diyah',
-      'Ibadah', ScheduleModeOption.basket),
-  _SeedSchedule(
-      '12:30', '13:00', 'Makan siang', 'Rutinitas', ScheduleModeOption.basket),
-  _SeedSchedule(
-      '13:00', '14:30', 'Tidur siang', 'Istirahat', ScheduleModeOption.basket),
-  _SeedSchedule('14:30', '15:30', 'Konten / edit video / digital skill',
-      'Digital Skill', ScheduleModeOption.basket),
-  _SeedSchedule(
-      '15:30', '16:00', 'Sholat Ashar', 'Ibadah', ScheduleModeOption.basket),
-  _SeedSchedule('16:00', '17:00', 'Aktivitas ringan / recovery', 'Istirahat',
-      ScheduleModeOption.basket),
-  _SeedSchedule('18:00', '19:00', 'Maghrib, Qur\'an ringan, makan malam',
-      'Ibadah', ScheduleModeOption.basket),
-  _SeedSchedule(
-      '19:00', '19:30', 'Sholat Isya', 'Ibadah', ScheduleModeOption.basket),
-  _SeedSchedule('19:30', '20:30', 'Review hari ini + planning besok',
-      'Planning', ScheduleModeOption.basket),
-  _SeedSchedule('20:30', '21:00', 'Persiapan tidur', 'Istirahat',
-      ScheduleModeOption.basket),
+      '20:30',
+      '21:00',
+      'Persiapan tidur, evaluasi diri, dan doa malam',
+      'Istirahat, Review',
+      ScheduleModeOption.regular),
 ];

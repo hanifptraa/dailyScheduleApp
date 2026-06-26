@@ -5,11 +5,9 @@ class ScheduleModeOption {
   final String label;
 
   static const regular =
-      ScheduleModeOption(code: 'regular', label: 'Hari Biasa');
-  static const basket =
-      ScheduleModeOption(code: 'basket', label: 'Hari Basket');
+      ScheduleModeOption(code: 'regular', label: 'Daily Schedule (example)');
 
-  static const defaults = <ScheduleModeOption>[regular, basket];
+  static const defaults = <ScheduleModeOption>[regular];
 
   static ScheduleModeOption fromCode(String code) {
     final trimmed = code.trim();
@@ -39,12 +37,12 @@ const maxCategoryNameLength = 24;
 const defaultCategories = <String>[
   'Persiapan',
   'Ibadah',
-  'Coding',
+  'Kerja / Belajar',
   'Rutinitas',
   'Project',
   'Olahraga',
   'Istirahat',
-  'Digital Skill',
+  'Skill',
   'Review',
   'Planning',
 ];

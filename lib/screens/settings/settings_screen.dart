@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/app_providers.dart';
+import '../../tutorial/guided_tutorial_controller.dart';
+import '../../tutorial/tutorial_keys.dart';
 import '../../utils/time_utils.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -101,7 +103,8 @@ class SettingsScreen extends ConsumerWidget {
                                 .read(scheduleRepositoryProvider)
                                 .setSetting('themeMode', value);
                             if (!context.mounted) return;
-                            refreshMainProviders(ref);
+                            ref.invalidate(settingsProvider);
+                            ref.invalidate(themeModeProvider);
                           },
                         ),
                       ),
@@ -282,12 +285,28 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              const Card(
-                child: ListTile(
-                  leading: Icon(Icons.info_outline),
-                  title: Text('Tentang aplikasi'),
-                  subtitle: Text(
-                      'Daily Schedule v1.0 - Offline personal schedule/checklist app dengan Flutter + Drift + SQLite.'),
+              Card(
+                child: Column(
+                  children: [
+                    ListTile(
+                      key: TutorialKeys.settingsTutorialButton,
+                      leading: const Icon(Icons.school_outlined),
+                      title: const Text('Tampilkan Tutorial Lagi'),
+                      subtitle: const Text(
+                          'Lihat kembali panduan singkat penggunaan aplikasi.'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => ref
+                          .read(guidedTutorialRequestProvider.notifier)
+                          .start(),
+                    ),
+                    const Divider(height: 1),
+                    const ListTile(
+                      leading: Icon(Icons.info_outline),
+                      title: Text('Tentang aplikasi'),
+                      subtitle: Text(
+                          'Daily Schedule v1.0 - Offline personal schedule/checklist app dengan Flutter + Drift + SQLite.'),
+                    ),
+                  ],
                 ),
               ),
             ],
