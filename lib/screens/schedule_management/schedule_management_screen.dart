@@ -8,6 +8,8 @@ import '../../utils/time_utils.dart';
 import '../../widgets/category_badge.dart';
 import '../../widgets/empty_state.dart';
 
+enum _CreateMenuAction { mode, schedule }
+
 class ScheduleManagementScreen extends ConsumerWidget {
   const ScheduleManagementScreen({super.key});
 
@@ -111,6 +113,9 @@ class ScheduleManagementScreen extends ConsumerWidget {
 
     if (result == true && context.mounted) {
       await ref
+          .read(notificationServiceProvider)
+          .cancelScheduleItemNotification(item.id);
+      await ref
           .read(scheduleRepositoryProvider)
           .softDeleteScheduleItem(item.id);
       if (!context.mounted) return;
@@ -126,96 +131,103 @@ class ScheduleManagementScreen extends ConsumerWidget {
     });
   }
 
-  void _openCreateMenu(
+  Future<void> _openCreateMenu(
     BuildContext context,
     WidgetRef ref, {
     required List<ScheduleModeOption> modeSuggestions,
     required List<String> categorySuggestions,
-  }) {
-    showModalBottomSheet<void>(
+  }) async {
+    final action = await showModalBottomSheet<_CreateMenuAction>(
       context: context,
+      isScrollControlled: true,
       useSafeArea: true,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Tambah Data',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 12),
-            Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              child: ListTile(
-                leading: const Icon(Icons.event_available_outlined),
-                title: const Text('Tambah Hari / Mode Baru',
-                    style: TextStyle(fontWeight: FontWeight.w900)),
-                subtitle:
-                    const Text('Buat nama hari baru tanpa membuat jadwal.'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  await Future<void>.delayed(Duration.zero);
-                  if (!context.mounted) return;
-                  await _createMode(context, ref);
-                },
+      builder: (sheetContext) => SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tambah Data',
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: ListTile(
+                  leading: const Icon(Icons.event_available_outlined),
+                  title: const Text('Tambah Hari / Mode Baru',
+                      style: TextStyle(fontWeight: FontWeight.w900)),
+                  subtitle:
+                      const Text('Buat nama hari baru tanpa membuat jadwal.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () =>
+                      Navigator.pop(sheetContext, _CreateMenuAction.mode),
+                ),
               ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.playlist_add_outlined),
-                title: const Text('Tambah Jadwal Baru',
-                    style: TextStyle(fontWeight: FontWeight.w900)),
-                subtitle:
-                    const Text('Buat aktivitas pada mode hari yang dipilih.'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  await Future<void>.delayed(Duration.zero);
-                  if (!context.mounted) return;
-                  _openForm(
-                    context,
-                    ref,
-                    null,
-                    modeSuggestions: modeSuggestions,
-                    categorySuggestions: categorySuggestions,
-                  );
-                },
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.playlist_add_outlined),
+                  title: const Text('Tambah Jadwal Baru',
+                      style: TextStyle(fontWeight: FontWeight.w900)),
+                  subtitle:
+                      const Text('Buat aktivitas pada mode hari yang dipilih.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () =>
+                      Navigator.pop(sheetContext, _CreateMenuAction.schedule),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+
+    if (action == null || !context.mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) return;
+
+    switch (action) {
+      case _CreateMenuAction.mode:
+        await _createMode(context, ref);
+      case _CreateMenuAction.schedule:
+        await _openForm(
+          context,
+          ref,
+          null,
+          modeSuggestions: modeSuggestions,
+          categorySuggestions: categorySuggestions,
+        );
+    }
   }
 
   Future<void> _createMode(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController();
+    var input = '';
     final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Tambah Mode Hari'),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
           autofocus: true,
           maxLength: 30,
           decoration: const InputDecoration(labelText: 'Nama hari/mode baru'),
+          onChanged: (value) => input = value,
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Batal')),
           FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              onPressed: () => Navigator.pop(dialogContext, input.trim()),
               child: const Text('Tambah Mode')),
         ],
       ),
     );
-    controller.dispose();
     if (result == null || result.isEmpty || !context.mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) return;
     final mode = ScheduleModeOption(code: result, label: result);
     await ref.read(scheduleRepositoryProvider).createScheduleMode(mode);
     if (!context.mounted) return;
@@ -233,6 +245,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
     required List<String> categorySuggestions,
   }) async {
     var categoryChanged = false;
+    var modeChanged = false;
     final draft = await showModalBottomSheet<ScheduleFormDraft>(
       context: context,
       isScrollControlled: true,
@@ -248,25 +261,55 @@ class ScheduleManagementScreen extends ConsumerWidget {
           await ref.read(scheduleRepositoryProvider).deleteCategory(category);
           categoryChanged = true;
         },
+        onDeleteMode: (mode) async {
+          final repo = ref.read(scheduleRepositoryProvider);
+          await ref
+              .read(notificationServiceProvider)
+              .cancelTodayNotifications();
+          await repo.deleteScheduleMode(mode);
+          final currentFilter = ref.read(scheduleModeFilterProvider);
+          if (currentFilter.code == mode.code) {
+            ref
+                .read(scheduleModeFilterProvider.notifier)
+                .setMode(ScheduleModeOption.regular);
+          }
+          await ref
+              .read(notificationServiceProvider)
+              .rescheduleTodayNotifications(repo);
+          modeChanged = true;
+        },
       ),
     );
 
     if (draft == null || !context.mounted) {
-      if (categoryChanged && context.mounted) _refreshAfterFrame(context, ref);
+      if ((categoryChanged || modeChanged) && context.mounted) {
+        _refreshAfterFrame(context, ref);
+      }
       return;
     }
     final repo = ref.read(scheduleRepositoryProvider);
     try {
       if (item == null) {
-        await repo.createScheduleItem(
+        final id = await repo.createScheduleItem(
           title: draft.title,
           description: draft.description,
           startTime: draft.startTime,
           endTime: draft.endTime,
           category: draft.category,
           mode: draft.mode,
+          enableNotification: draft.enableNotification,
+          notifyBeforeMinutes: draft.notifyBeforeMinutes,
         );
+        final savedItem = await repo.getScheduleItemById(id);
+        if (savedItem != null && draft.enableNotification) {
+          await ref
+              .read(notificationServiceProvider)
+              .scheduleScheduleItemNotification(item: savedItem);
+        }
       } else {
+        await ref
+            .read(notificationServiceProvider)
+            .cancelScheduleItemNotification(item.id);
         await repo.updateScheduleItem(
           id: item.id,
           title: draft.title,
@@ -276,7 +319,17 @@ class ScheduleManagementScreen extends ConsumerWidget {
           category: draft.category,
           mode: draft.mode,
           isActive: draft.isActive,
+          enableNotification: draft.enableNotification,
+          notifyBeforeMinutes: draft.notifyBeforeMinutes,
         );
+        final savedItem = await repo.getScheduleItemById(item.id);
+        if (savedItem != null &&
+            savedItem.isActive &&
+            savedItem.enableNotification) {
+          await ref
+              .read(notificationServiceProvider)
+              .scheduleScheduleItemNotification(item: savedItem);
+        }
       }
       if (!context.mounted) return;
       ref.read(scheduleModeFilterProvider.notifier).setMode(draft.mode);
@@ -309,12 +362,12 @@ class ScheduleManagementScreen extends ConsumerWidget {
         modes: modes,
         onRename: (mode) async {
           if (sheetContext.mounted) Navigator.pop(sheetContext);
-          await Future<void>.delayed(Duration.zero);
+          await WidgetsBinding.instance.endOfFrame;
           if (context.mounted) await _renameMode(context, ref, mode);
         },
         onDelete: (mode) async {
           if (sheetContext.mounted) Navigator.pop(sheetContext);
-          await Future<void>.delayed(Duration.zero);
+          await WidgetsBinding.instance.endOfFrame;
           if (context.mounted) await _deleteMode(context, ref, mode, current);
         },
       ),
@@ -323,30 +376,32 @@ class ScheduleManagementScreen extends ConsumerWidget {
 
   Future<void> _renameMode(
       BuildContext context, WidgetRef ref, ScheduleModeOption mode) async {
-    final controller = TextEditingController(text: mode.label);
+    var input = mode.label;
     final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Ubah nama hari'),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
+          initialValue: mode.label,
           autofocus: true,
           maxLength: 30,
           decoration: const InputDecoration(labelText: 'Nama hari/mode'),
+          onChanged: (value) => input = value,
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Batal')),
           FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              onPressed: () => Navigator.pop(dialogContext, input.trim()),
               child: const Text('Simpan')),
         ],
       ),
     );
-    controller.dispose();
 
     if (result == null || result.isEmpty || !context.mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) return;
     final newMode = ScheduleModeOption(code: result, label: result);
     await ref
         .read(scheduleRepositoryProvider)
@@ -378,13 +433,19 @@ class ScheduleManagementScreen extends ConsumerWidget {
     );
 
     if (result != true || !context.mounted) return;
-    await ref.read(scheduleRepositoryProvider).deleteScheduleMode(mode);
+    final repo = ref.read(scheduleRepositoryProvider);
+    await ref.read(notificationServiceProvider).cancelTodayNotifications();
+    await repo.deleteScheduleMode(mode);
     if (!context.mounted) return;
     if (current.code == mode.code) {
       ref
           .read(scheduleModeFilterProvider.notifier)
           .setMode(ScheduleModeOption.regular);
     }
+    await ref
+        .read(notificationServiceProvider)
+        .rescheduleTodayNotifications(repo);
+    if (!context.mounted) return;
     _refreshAfterFrame(context, ref);
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Mode hari dihapus')));
@@ -603,6 +664,8 @@ class ScheduleFormDraft {
     required this.category,
     required this.mode,
     required this.isActive,
+    required this.enableNotification,
+    required this.notifyBeforeMinutes,
   });
 
   final String title;
@@ -612,6 +675,8 @@ class ScheduleFormDraft {
   final String category;
   final ScheduleModeOption mode;
   final bool isActive;
+  final bool enableNotification;
+  final int notifyBeforeMinutes;
 }
 
 class ScheduleFormSheet extends StatefulWidget {
@@ -622,6 +687,7 @@ class ScheduleFormSheet extends StatefulWidget {
     required this.modeSuggestions,
     required this.categorySuggestions,
     required this.onDeleteCategory,
+    required this.onDeleteMode,
   });
 
   final ScheduleItem? item;
@@ -629,6 +695,7 @@ class ScheduleFormSheet extends StatefulWidget {
   final List<ScheduleModeOption> modeSuggestions;
   final List<String> categorySuggestions;
   final Future<void> Function(String category) onDeleteCategory;
+  final Future<void> Function(ScheduleModeOption mode) onDeleteMode;
 
   @override
   State<ScheduleFormSheet> createState() => _ScheduleFormSheetState();
@@ -643,6 +710,8 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
   late TimeOfDay _start;
   late TimeOfDay _end;
   late bool _isActive;
+  late bool _enableNotification;
+  late List<ScheduleModeOption> _availableModes;
   late final List<String> _selectedCategories;
 
   bool get _isEdit => widget.item != null;
@@ -656,6 +725,12 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
         TextEditingController(text: item?.description ?? '');
     _categoryController = TextEditingController();
     _modeController = TextEditingController(text: widget.initialMode.label);
+    _availableModes = [
+      if (!widget.modeSuggestions
+          .any((mode) => mode.code == widget.initialMode.code))
+        widget.initialMode,
+      ...widget.modeSuggestions,
+    ];
     _selectedCategories =
         parseCategories(item?.category ?? defaultCategories.first);
     _start = item == null
@@ -665,6 +740,7 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
         ? const TimeOfDay(hour: 9, minute: 0)
         : AppTimeUtils.toTimeOfDay(item.endTime);
     _isActive = item?.isActive ?? true;
+    _enableNotification = item?.enableNotification ?? true;
   }
 
   @override
@@ -722,10 +798,11 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
               ),
               const SizedBox(height: 10),
               _ModeChoiceChips(
-                modes: widget.modeSuggestions,
+                modes: _availableModes,
                 currentLabel: _modeController.text,
                 onSelected: (value) =>
                     setState(() => _modeController.text = value),
+                onLongPress: _confirmDeleteMode,
               ),
               const SizedBox(height: 22),
               _SectionLabel(
@@ -816,6 +893,43 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
                 onLongPress: _confirmDeleteCategory,
               ),
               const SizedBox(height: 18),
+              _SectionLabel(
+                icon: Icons.notifications_active_outlined,
+                title: 'Pengingat Jadwal',
+                subtitle:
+                    'Atur apakah jadwal ini perlu mengirim notifikasi pengingat.',
+              ),
+              const SizedBox(height: 10),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Aktifkan Notifikasi'),
+                value: _enableNotification,
+                onChanged: (value) =>
+                    setState(() => _enableNotification = value),
+              ),
+              AnimatedOpacity(
+                opacity: _enableNotification ? 1 : 0.45,
+                duration: const Duration(milliseconds: 180),
+                child: IgnorePointer(
+                  ignoring: !_enableNotification,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Notifikasi akan muncul tepat saat jadwal dimulai.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
               if (_isEdit) ...[
                 const SizedBox(height: 8),
                 SwitchListTile(
@@ -864,6 +978,45 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
     _categoryController.clear();
   }
 
+  Future<void> _confirmDeleteMode(ScheduleModeOption mode) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus mode hari?'),
+        content: Text(
+            'Mode "${mode.label}" akan dihapus dari pilihan dan jadwal aktifnya dinonaktifkan. Riwayat lama tetap aman.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal')),
+          FilledButton.tonal(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (result != true || !mounted) return;
+    await widget.onDeleteMode(mode);
+    if (!mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    setState(() {
+      _availableModes = _availableModes
+          .where((item) => item.code != mode.code)
+          .toList(growable: false);
+      if (_availableModes.isEmpty) {
+        _availableModes = [ScheduleModeOption.regular];
+      }
+      final current =
+          ScheduleModeOption.normalizeCustomCode(_modeController.text);
+      if (current == mode.label || current == mode.code) {
+        _modeController.text = _availableModes.first.label;
+      }
+    });
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Mode hari dihapus')));
+  }
+
   Future<void> _confirmDeleteCategory(String category) async {
     final result = await showDialog<bool>(
       context: context,
@@ -906,7 +1059,7 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
 
   ScheduleModeOption _resolveMode() {
     final value = ScheduleModeOption.normalizeCustomCode(_modeController.text);
-    for (final mode in widget.modeSuggestions) {
+    for (final mode in _availableModes) {
       if (mode.label.toLowerCase() == value.toLowerCase() ||
           mode.code.toLowerCase() == value.toLowerCase()) {
         return mode;
@@ -940,6 +1093,8 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
         category: encodeCategories(_selectedCategories),
         mode: _resolveMode(),
         isActive: _isActive,
+        enableNotification: _enableNotification,
+        notifyBeforeMinutes: 0,
       ),
     );
   }
@@ -1048,32 +1203,67 @@ class _CategoryChoiceChips extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Semua Kategori',
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w900)),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  for (final value in values)
-                    _categoryChip(
-                        context, Theme.of(context).colorScheme, value),
-                ],
-              ),
-            ],
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Semua Kategori',
+                    style: Theme.of(sheetContext)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    for (final value in values)
+                      _modalCategoryChip(sheetContext, scheme, value),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+
+  Widget _modalCategoryChip(
+      BuildContext sheetContext, ColorScheme scheme, String value) {
+    final isSelected = selected.contains(value);
+    final chip = FilterChip(
+      label: Text(value),
+      selected: isSelected,
+      onSelected: onSelected == null
+          ? null
+          : (_) {
+              Navigator.pop(sheetContext);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                onSelected?.call(value);
+              });
+            },
+      selectedColor: scheme.primaryContainer,
+      checkmarkColor: scheme.onPrimaryContainer,
+      labelStyle: TextStyle(
+        color: isSelected ? scheme.onPrimaryContainer : null,
+        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
       ),
+    );
+    if (onLongPress == null) return chip;
+    return GestureDetector(
+      onLongPress: () {
+        Navigator.pop(sheetContext);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          onLongPress?.call(value);
+        });
+      },
+      child: chip,
     );
   }
 }
@@ -1083,6 +1273,7 @@ class _ModeChoiceChips extends StatelessWidget {
     required this.modes,
     required this.currentLabel,
     required this.onSelected,
+    required this.onLongPress,
   });
 
   static const _visibleLimit = 6;
@@ -1090,6 +1281,7 @@ class _ModeChoiceChips extends StatelessWidget {
   final List<ScheduleModeOption> modes;
   final String currentLabel;
   final ValueChanged<String>? onSelected;
+  final ValueChanged<ScheduleModeOption>? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -1113,7 +1305,7 @@ class _ModeChoiceChips extends StatelessWidget {
   Widget _modeChip(BuildContext context, ScheduleModeOption mode) {
     final scheme = Theme.of(context).colorScheme;
     final selected = mode.label.toLowerCase() == currentLabel.toLowerCase();
-    return ChoiceChip(
+    final chip = ChoiceChip(
       label: Text(mode.label),
       selected: selected,
       onSelected: onSelected == null ? null : (_) => onSelected!(mode.label),
@@ -1123,13 +1315,18 @@ class _ModeChoiceChips extends StatelessWidget {
         fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
       ),
     );
+    if (onLongPress == null) return chip;
+    return GestureDetector(
+      onLongPress: () => onLongPress!(mode),
+      child: chip,
+    );
   }
 
   void _showAllModes(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
-      builder: (context) => Padding(
+      builder: (sheetContext) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         child: SingleChildScrollView(
           child: Column(
@@ -1137,7 +1334,7 @@ class _ModeChoiceChips extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('Semua Mode Hari',
-                  style: Theme.of(context)
+                  style: Theme.of(sheetContext)
                       .textTheme
                       .headlineSmall
                       ?.copyWith(fontWeight: FontWeight.w900)),
@@ -1145,12 +1342,46 @@ class _ModeChoiceChips extends StatelessWidget {
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
-                children: [for (final mode in modes) _modeChip(context, mode)],
+                children: [
+                  for (final mode in modes) _modalModeChip(sheetContext, mode),
+                ],
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _modalModeChip(BuildContext sheetContext, ScheduleModeOption mode) {
+    final scheme = Theme.of(sheetContext).colorScheme;
+    final selected = mode.label.toLowerCase() == currentLabel.toLowerCase();
+    final chip = ChoiceChip(
+      label: Text(mode.label),
+      selected: selected,
+      onSelected: onSelected == null
+          ? null
+          : (_) {
+              Navigator.pop(sheetContext);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                onSelected?.call(mode.label);
+              });
+            },
+      selectedColor: scheme.primaryContainer,
+      labelStyle: TextStyle(
+        color: selected ? scheme.onPrimaryContainer : null,
+        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+      ),
+    );
+    if (onLongPress == null) return chip;
+    return GestureDetector(
+      onLongPress: () {
+        Navigator.pop(sheetContext);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          onLongPress?.call(mode);
+        });
+      },
+      child: chip,
     );
   }
 }

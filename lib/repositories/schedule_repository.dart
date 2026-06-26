@@ -349,6 +349,11 @@ class ScheduleRepository {
     );
   }
 
+  Future<ScheduleItem?> getScheduleItemById(int id) async {
+    return (db.select(db.scheduleItems)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+  }
+
   Future<int> createScheduleItem({
     required String title,
     String? description,
@@ -356,6 +361,8 @@ class ScheduleRepository {
     required String endTime,
     required String category,
     required ScheduleModeOption mode,
+    required bool enableNotification,
+    required int notifyBeforeMinutes,
   }) async {
     final now = DateTime.now();
     return db.into(db.scheduleItems).insert(
@@ -369,6 +376,8 @@ class ScheduleRepository {
             category: normalizeCategoryValue(category),
             scheduleMode: mode.code,
             isActive: const Value(true),
+            enableNotification: Value(enableNotification),
+            notifyBeforeMinutes: Value(notifyBeforeMinutes),
             createdAt: Value(now),
             updatedAt: Value(now),
           ),
@@ -384,6 +393,8 @@ class ScheduleRepository {
     required String category,
     required ScheduleModeOption mode,
     required bool isActive,
+    required bool enableNotification,
+    required int notifyBeforeMinutes,
   }) async {
     await (db.update(db.scheduleItems)..where((t) => t.id.equals(id))).write(
       ScheduleItemsCompanion(
@@ -396,6 +407,8 @@ class ScheduleRepository {
         category: Value(normalizeCategoryValue(category)),
         scheduleMode: Value(mode.code),
         isActive: Value(isActive),
+        enableNotification: Value(enableNotification),
+        notifyBeforeMinutes: Value(notifyBeforeMinutes),
         updatedAt: Value(DateTime.now()),
       ),
     );
@@ -582,6 +595,16 @@ class ScheduleRepository {
         ..._regularDefaults.map(_toCompanion),
         ..._basketDefaults.map(_toCompanion),
       ]);
+    });
+  }
+
+  Future<void> deleteHistoryDay(String dateKey) async {
+    await db.transaction(() async {
+      await (db.delete(db.dailyChecklists)
+            ..where((t) => t.date.equals(dateKey)))
+          .go();
+      await (db.delete(db.dailyModes)..where((t) => t.date.equals(dateKey)))
+          .go();
     });
   }
 

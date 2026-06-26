@@ -19,6 +19,9 @@ void main() {
 
   testWidgets('Schedule form can open and close without lifecycle assertions',
       (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     await ScheduleRepository(database).seedDefaultDataIfNeeded();
@@ -29,23 +32,74 @@ void main() {
         child: const DailyScheduleApp(),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.text('Hari Ini'));
 
     await tester.tap(find.text('Jadwal'));
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.text('Tambah'));
 
     await tester.tap(find.text('Tambah'));
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.text('Tambah Data'));
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Tambah Data'), findsOneWidget);
+    expect(find.text('Tambah Hari / Mode Baru'), findsOneWidget);
+    expect(find.text('Tambah Jadwal Baru'), findsOneWidget);
+    await tester.tap(find.text('Tambah Hari / Mode Baru'));
+    await _pumpUntilFound(tester, find.text('Tambah Mode Hari'));
+    await tester.tap(find.text('Batal'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Tambah Jadwal Baru'));
-    await tester.pumpAndSettle();
-    expect(find.text('Tambah Jadwal'), findsWidgets);
+    await tester.tap(find.text('Tambah'));
+    await _pumpUntilFound(tester, find.text('Tambah Data'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Tambah Hari / Mode Baru'));
+    await _pumpUntilFound(tester, find.text('Tambah Mode Hari'));
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Tambah'));
+    await _pumpUntilFound(tester, find.text('Tambah Data'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Tambah Hari / Mode Baru'));
+    await _pumpUntilFound(tester, find.text('Tambah Mode Hari'));
+    await tester.enterText(find.byType(TextFormField).last, 'Mode Test');
+    await tester.tap(find.text('Tambah Mode'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Tambah'));
+    await _pumpUntilFound(tester, find.text('Tambah Data'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.text('Hari Biasa').first);
+    await tester.pump(const Duration(milliseconds: 500));
+    await _pumpUntilFound(tester, find.byType(PopupMenuButton<String>));
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await _pumpUntilFound(tester, find.text('Edit'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Edit').last);
+    await _pumpUntilFound(tester, find.text('Pengingat Jadwal'));
     expect(find.text('Pilih hari untuk jadwal'), findsOneWidget);
+    expect(find.text('Aktifkan Notifikasi'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.close));
-    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  int maxPumps = 20,
+}) async {
+  for (var i = 0; i < maxPumps; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  expect(finder, findsWidgets);
 }

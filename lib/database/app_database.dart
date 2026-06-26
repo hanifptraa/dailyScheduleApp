@@ -12,6 +12,10 @@ class ScheduleItems extends Table {
   TextColumn get category => text().withLength(min: 1, max: 60)();
   TextColumn get scheduleMode => text().withLength(min: 1, max: 30)();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  BoolColumn get enableNotification =>
+      boolean().withDefault(const Constant(true))();
+  IntColumn get notifyBeforeMinutes =>
+      integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
@@ -57,15 +61,23 @@ class AppSettings extends Table {
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-@DriftDatabase(tables: [ScheduleItems, DailyChecklists, DailyModes, AppSettings])
+@DriftDatabase(
+    tables: [ScheduleItems, DailyChecklists, DailyModes, AppSettings])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? driftDatabase(name: 'daily_schedule'));
+  AppDatabase([QueryExecutor? executor])
+      : super(executor ?? driftDatabase(name: 'daily_schedule'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(scheduleItems, scheduleItems.enableNotification);
+            await m.addColumn(scheduleItems, scheduleItems.notifyBeforeMinutes);
+          }
+        },
       );
 }

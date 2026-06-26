@@ -5,6 +5,7 @@ import '../database/app_database.dart';
 import '../models/schedule_mode.dart';
 import '../models/today_models.dart';
 import '../repositories/schedule_repository.dart';
+import '../services/notification_service.dart';
 import '../utils/date_utils.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -15,6 +16,13 @@ final scheduleRepositoryProvider = Provider<ScheduleRepository>((ref) {
   return ScheduleRepository(ref.watch(databaseProvider));
 });
 
+final notificationServiceProvider = Provider<NotificationService>((ref) {
+  return NotificationService.instance;
+});
+
+final notificationPermissionProvider = FutureProvider<bool>((ref) async {
+  return ref.watch(notificationServiceProvider).hasNotificationPermission();
+});
 final navigationIndexProvider = NotifierProvider<NavigationIndexNotifier, int>(
   NavigationIndexNotifier.new,
 );
@@ -93,4 +101,5 @@ void refreshMainProviders(WidgetRef ref) {
   ref.invalidate(statisticsProvider);
   ref.invalidate(settingsProvider);
   ref.invalidate(themeModeProvider);
+  ref.invalidate(notificationPermissionProvider);
 }

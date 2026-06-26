@@ -48,9 +48,11 @@ class TodayScreen extends ConsumerWidget {
                   modes: modes,
                   onModeChanged: (mode) async {
                     final key = AppDateUtils.dateKey(DateTime.now());
+                    final repository = ref.read(scheduleRepositoryProvider);
+                    await repository.setDailyMode(key, mode);
                     await ref
-                        .read(scheduleRepositoryProvider)
-                        .setDailyMode(key, mode);
+                        .read(notificationServiceProvider)
+                        .rescheduleTodayNotifications(repository);
                     if (!context.mounted) return;
                     refreshMainProviders(ref);
                     if (context.mounted) {

@@ -78,6 +78,24 @@ class $ScheduleItemsTable extends ScheduleItems
       defaultConstraints:
           GeneratedColumn.constraintIsAlways('CHECK ("is_active" IN (0, 1))'),
       defaultValue: const Constant(true));
+  static const VerificationMeta _enableNotificationMeta =
+      const VerificationMeta('enableNotification');
+  @override
+  late final GeneratedColumn<bool> enableNotification = GeneratedColumn<bool>(
+      'enable_notification', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("enable_notification" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _notifyBeforeMinutesMeta =
+      const VerificationMeta('notifyBeforeMinutes');
+  @override
+  late final GeneratedColumn<int> notifyBeforeMinutes = GeneratedColumn<int>(
+      'notify_before_minutes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -104,6 +122,8 @@ class $ScheduleItemsTable extends ScheduleItems
         category,
         scheduleMode,
         isActive,
+        enableNotification,
+        notifyBeforeMinutes,
         createdAt,
         updatedAt
       ];
@@ -162,6 +182,18 @@ class $ScheduleItemsTable extends ScheduleItems
       context.handle(_isActiveMeta,
           isActive.isAcceptableOrUnknown(data['is_active']!, _isActiveMeta));
     }
+    if (data.containsKey('enable_notification')) {
+      context.handle(
+          _enableNotificationMeta,
+          enableNotification.isAcceptableOrUnknown(
+              data['enable_notification']!, _enableNotificationMeta));
+    }
+    if (data.containsKey('notify_before_minutes')) {
+      context.handle(
+          _notifyBeforeMinutesMeta,
+          notifyBeforeMinutes.isAcceptableOrUnknown(
+              data['notify_before_minutes']!, _notifyBeforeMinutesMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -195,6 +227,10 @@ class $ScheduleItemsTable extends ScheduleItems
           .read(DriftSqlType.string, data['${effectivePrefix}schedule_mode'])!,
       isActive: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_active'])!,
+      enableNotification: attachedDatabase.typeMapping.read(
+          DriftSqlType.bool, data['${effectivePrefix}enable_notification'])!,
+      notifyBeforeMinutes: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}notify_before_minutes'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
       updatedAt: attachedDatabase.typeMapping
@@ -217,6 +253,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
   final String category;
   final String scheduleMode;
   final bool isActive;
+  final bool enableNotification;
+  final int notifyBeforeMinutes;
   final DateTime createdAt;
   final DateTime updatedAt;
   const ScheduleItem(
@@ -228,6 +266,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       required this.category,
       required this.scheduleMode,
       required this.isActive,
+      required this.enableNotification,
+      required this.notifyBeforeMinutes,
       required this.createdAt,
       required this.updatedAt});
   @override
@@ -243,6 +283,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
     map['category'] = Variable<String>(category);
     map['schedule_mode'] = Variable<String>(scheduleMode);
     map['is_active'] = Variable<bool>(isActive);
+    map['enable_notification'] = Variable<bool>(enableNotification);
+    map['notify_before_minutes'] = Variable<int>(notifyBeforeMinutes);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -260,6 +302,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       category: Value(category),
       scheduleMode: Value(scheduleMode),
       isActive: Value(isActive),
+      enableNotification: Value(enableNotification),
+      notifyBeforeMinutes: Value(notifyBeforeMinutes),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -277,6 +321,9 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       category: serializer.fromJson<String>(json['category']),
       scheduleMode: serializer.fromJson<String>(json['scheduleMode']),
       isActive: serializer.fromJson<bool>(json['isActive']),
+      enableNotification: serializer.fromJson<bool>(json['enableNotification']),
+      notifyBeforeMinutes:
+          serializer.fromJson<int>(json['notifyBeforeMinutes']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -293,6 +340,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       'category': serializer.toJson<String>(category),
       'scheduleMode': serializer.toJson<String>(scheduleMode),
       'isActive': serializer.toJson<bool>(isActive),
+      'enableNotification': serializer.toJson<bool>(enableNotification),
+      'notifyBeforeMinutes': serializer.toJson<int>(notifyBeforeMinutes),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -307,6 +356,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
           String? category,
           String? scheduleMode,
           bool? isActive,
+          bool? enableNotification,
+          int? notifyBeforeMinutes,
           DateTime? createdAt,
           DateTime? updatedAt}) =>
       ScheduleItem(
@@ -318,6 +369,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
         category: category ?? this.category,
         scheduleMode: scheduleMode ?? this.scheduleMode,
         isActive: isActive ?? this.isActive,
+        enableNotification: enableNotification ?? this.enableNotification,
+        notifyBeforeMinutes: notifyBeforeMinutes ?? this.notifyBeforeMinutes,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );
@@ -334,6 +387,12 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
           ? data.scheduleMode.value
           : this.scheduleMode,
       isActive: data.isActive.present ? data.isActive.value : this.isActive,
+      enableNotification: data.enableNotification.present
+          ? data.enableNotification.value
+          : this.enableNotification,
+      notifyBeforeMinutes: data.notifyBeforeMinutes.present
+          ? data.notifyBeforeMinutes.value
+          : this.notifyBeforeMinutes,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -350,6 +409,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
           ..write('category: $category, ')
           ..write('scheduleMode: $scheduleMode, ')
           ..write('isActive: $isActive, ')
+          ..write('enableNotification: $enableNotification, ')
+          ..write('notifyBeforeMinutes: $notifyBeforeMinutes, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -357,8 +418,19 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
   }
 
   @override
-  int get hashCode => Object.hash(id, title, description, startTime, endTime,
-      category, scheduleMode, isActive, createdAt, updatedAt);
+  int get hashCode => Object.hash(
+      id,
+      title,
+      description,
+      startTime,
+      endTime,
+      category,
+      scheduleMode,
+      isActive,
+      enableNotification,
+      notifyBeforeMinutes,
+      createdAt,
+      updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -371,6 +443,8 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
           other.category == this.category &&
           other.scheduleMode == this.scheduleMode &&
           other.isActive == this.isActive &&
+          other.enableNotification == this.enableNotification &&
+          other.notifyBeforeMinutes == this.notifyBeforeMinutes &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -384,6 +458,8 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
   final Value<String> category;
   final Value<String> scheduleMode;
   final Value<bool> isActive;
+  final Value<bool> enableNotification;
+  final Value<int> notifyBeforeMinutes;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const ScheduleItemsCompanion({
@@ -395,6 +471,8 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     this.category = const Value.absent(),
     this.scheduleMode = const Value.absent(),
     this.isActive = const Value.absent(),
+    this.enableNotification = const Value.absent(),
+    this.notifyBeforeMinutes = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -407,6 +485,8 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     required String category,
     required String scheduleMode,
     this.isActive = const Value.absent(),
+    this.enableNotification = const Value.absent(),
+    this.notifyBeforeMinutes = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   })  : title = Value(title),
@@ -423,6 +503,8 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     Expression<String>? category,
     Expression<String>? scheduleMode,
     Expression<bool>? isActive,
+    Expression<bool>? enableNotification,
+    Expression<int>? notifyBeforeMinutes,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -435,6 +517,9 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
       if (category != null) 'category': category,
       if (scheduleMode != null) 'schedule_mode': scheduleMode,
       if (isActive != null) 'is_active': isActive,
+      if (enableNotification != null) 'enable_notification': enableNotification,
+      if (notifyBeforeMinutes != null)
+        'notify_before_minutes': notifyBeforeMinutes,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -449,6 +534,8 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
       Value<String>? category,
       Value<String>? scheduleMode,
       Value<bool>? isActive,
+      Value<bool>? enableNotification,
+      Value<int>? notifyBeforeMinutes,
       Value<DateTime>? createdAt,
       Value<DateTime>? updatedAt}) {
     return ScheduleItemsCompanion(
@@ -460,6 +547,8 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
       category: category ?? this.category,
       scheduleMode: scheduleMode ?? this.scheduleMode,
       isActive: isActive ?? this.isActive,
+      enableNotification: enableNotification ?? this.enableNotification,
+      notifyBeforeMinutes: notifyBeforeMinutes ?? this.notifyBeforeMinutes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -492,6 +581,12 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     if (isActive.present) {
       map['is_active'] = Variable<bool>(isActive.value);
     }
+    if (enableNotification.present) {
+      map['enable_notification'] = Variable<bool>(enableNotification.value);
+    }
+    if (notifyBeforeMinutes.present) {
+      map['notify_before_minutes'] = Variable<int>(notifyBeforeMinutes.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -512,6 +607,8 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
           ..write('category: $category, ')
           ..write('scheduleMode: $scheduleMode, ')
           ..write('isActive: $isActive, ')
+          ..write('enableNotification: $enableNotification, ')
+          ..write('notifyBeforeMinutes: $notifyBeforeMinutes, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1863,6 +1960,8 @@ typedef $$ScheduleItemsTableCreateCompanionBuilder = ScheduleItemsCompanion
   required String category,
   required String scheduleMode,
   Value<bool> isActive,
+  Value<bool> enableNotification,
+  Value<int> notifyBeforeMinutes,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
 });
@@ -1876,6 +1975,8 @@ typedef $$ScheduleItemsTableUpdateCompanionBuilder = ScheduleItemsCompanion
   Value<String> category,
   Value<String> scheduleMode,
   Value<bool> isActive,
+  Value<bool> enableNotification,
+  Value<int> notifyBeforeMinutes,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
 });
@@ -1935,6 +2036,14 @@ class $$ScheduleItemsTableFilterComposer
 
   ColumnFilters<bool> get isActive => $composableBuilder(
       column: $table.isActive, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get enableNotification => $composableBuilder(
+      column: $table.enableNotification,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get notifyBeforeMinutes => $composableBuilder(
+      column: $table.notifyBeforeMinutes,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -1998,6 +2107,14 @@ class $$ScheduleItemsTableOrderingComposer
   ColumnOrderings<bool> get isActive => $composableBuilder(
       column: $table.isActive, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get enableNotification => $composableBuilder(
+      column: $table.enableNotification,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get notifyBeforeMinutes => $composableBuilder(
+      column: $table.notifyBeforeMinutes,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 
@@ -2037,6 +2154,12 @@ class $$ScheduleItemsTableAnnotationComposer
 
   GeneratedColumn<bool> get isActive =>
       $composableBuilder(column: $table.isActive, builder: (column) => column);
+
+  GeneratedColumn<bool> get enableNotification => $composableBuilder(
+      column: $table.enableNotification, builder: (column) => column);
+
+  GeneratedColumn<int> get notifyBeforeMinutes => $composableBuilder(
+      column: $table.notifyBeforeMinutes, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -2097,6 +2220,8 @@ class $$ScheduleItemsTableTableManager extends RootTableManager<
             Value<String> category = const Value.absent(),
             Value<String> scheduleMode = const Value.absent(),
             Value<bool> isActive = const Value.absent(),
+            Value<bool> enableNotification = const Value.absent(),
+            Value<int> notifyBeforeMinutes = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
           }) =>
@@ -2109,6 +2234,8 @@ class $$ScheduleItemsTableTableManager extends RootTableManager<
             category: category,
             scheduleMode: scheduleMode,
             isActive: isActive,
+            enableNotification: enableNotification,
+            notifyBeforeMinutes: notifyBeforeMinutes,
             createdAt: createdAt,
             updatedAt: updatedAt,
           ),
@@ -2121,6 +2248,8 @@ class $$ScheduleItemsTableTableManager extends RootTableManager<
             required String category,
             required String scheduleMode,
             Value<bool> isActive = const Value.absent(),
+            Value<bool> enableNotification = const Value.absent(),
+            Value<int> notifyBeforeMinutes = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
           }) =>
@@ -2133,6 +2262,8 @@ class $$ScheduleItemsTableTableManager extends RootTableManager<
             category: category,
             scheduleMode: scheduleMode,
             isActive: isActive,
+            enableNotification: enableNotification,
+            notifyBeforeMinutes: notifyBeforeMinutes,
             createdAt: createdAt,
             updatedAt: updatedAt,
           ),

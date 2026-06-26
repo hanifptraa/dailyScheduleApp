@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/today_models.dart';
 import '../../providers/app_providers.dart';
 import '../../utils/date_utils.dart';
 import '../../widgets/category_badge.dart';
@@ -44,45 +45,51 @@ class HistoryScreen extends ConsumerWidget {
                 final day = history[index];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Card(
-                    child: ExpansionTile(
-                      tilePadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      childrenPadding: const EdgeInsets.only(bottom: 8),
-                      title: Text(
-                        AppDateUtils.formatDateKey(day.dateKey),
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Text(
-                            '${day.mode.label} • ${day.done}/${day.total} selesai • ${day.percent}% • ${day.status}'),
-                      ),
-                      trailing: _PercentPill(percent: day.percent),
-                      children: [
-                        const Divider(height: 1),
-                        for (final item in day.items)
-                          ListTile(
-                            leading: Icon(item.isDone
-                                ? Icons.check_circle
-                                : Icons.radio_button_unchecked),
-                            title: Text(item.snapshotTitle,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700)),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                      '${item.snapshotStartTime} - ${item.snapshotEndTime}'),
-                                  const SizedBox(height: 6),
-                                  CategoryBadges(value: item.snapshotCategory),
-                                ],
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: () =>
+                        _confirmDeleteHistoryDay(context, ref, day),
+                    child: Card(
+                      child: ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        childrenPadding: const EdgeInsets.only(bottom: 8),
+                        title: Text(
+                          AppDateUtils.formatDateKey(day.dateKey),
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Text(
+                              '${day.mode.label} - ${day.done}/${day.total} selesai - ${day.percent}% - ${day.status}'),
+                        ),
+                        trailing: _PercentPill(percent: day.percent),
+                        children: [
+                          const Divider(height: 1),
+                          for (final item in day.items)
+                            ListTile(
+                              leading: Icon(item.isDone
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked),
+                              title: Text(item.snapshotTitle,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                        '${item.snapshotStartTime} - ${item.snapshotEndTime}'),
+                                    const SizedBox(height: 6),
+                                    CategoryBadges(
+                                        value: item.snapshotCategory),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -92,6 +99,35 @@ class HistoryScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteHistoryDay(
+    BuildContext context,
+    WidgetRef ref,
+    HistoryDayData day,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus riwayat?'),
+        content: Text(
+            'Riwayat ${AppDateUtils.formatDateKey(day.dateKey)} akan dihapus permanen.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Batal')),
+          FilledButton.tonal(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (result != true || !context.mounted) return;
+    await ref.read(scheduleRepositoryProvider).deleteHistoryDay(day.dateKey);
+    if (!context.mounted) return;
+    refreshMainProviders(ref);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Riwayat dihapus')));
   }
 }
 

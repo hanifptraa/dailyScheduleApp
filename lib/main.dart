@@ -5,11 +5,16 @@ import 'app.dart';
 import 'database/app_database.dart';
 import 'providers/app_providers.dart';
 import 'repositories/schedule_repository.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final database = AppDatabase();
-  await ScheduleRepository(database).seedDefaultDataIfNeeded();
+  final repository = ScheduleRepository(database);
+  await repository.seedDefaultDataIfNeeded();
+  await NotificationService.instance.initialize();
+  await NotificationService.instance.requestNotificationPermission();
+  await NotificationService.instance.rescheduleTodayNotifications(repository);
 
   runApp(
     ProviderScope(

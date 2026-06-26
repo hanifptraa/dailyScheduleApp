@@ -10,6 +10,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncSettings = ref.watch(settingsProvider);
+    final asyncPermission = ref.watch(notificationPermissionProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Setelan')),
@@ -110,6 +111,106 @@ class SettingsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.notifications_active_outlined),
+                          const SizedBox(width: 10),
+                          Text('Notifikasi',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      asyncPermission.when(
+                        loading: () => const LinearProgressIndicator(),
+                        error: (_, __) => const Text(
+                            'Status izin notifikasi belum bisa dibaca.'),
+                        data: (allowed) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Status izin notifikasi: ${allowed ? 'Aktif' : 'Belum aktif'}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            if (!allowed) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Notifikasi belum aktif. Aktifkan izin notifikasi agar pengingat jadwal bisa muncul.',
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              await ref
+                                  .read(notificationServiceProvider)
+                                  .requestNotificationPermission();
+                              ref.invalidate(notificationPermissionProvider);
+                            },
+                            icon: const Icon(Icons.verified_user_outlined),
+                            label: const Text('Cek Izin Notifikasi'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              await ref
+                                  .read(notificationServiceProvider)
+                                  .rescheduleTodayNotifications(
+                                    ref.read(scheduleRepositoryProvider),
+                                  );
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Notifikasi hari ini dijadwalkan ulang'),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.refresh_outlined),
+                            label: const Text(
+                                'Jadwalkan Ulang Notifikasi Hari Ini'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              await ref
+                                  .read(notificationServiceProvider)
+                                  .cancelAllNotifications();
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Semua notifikasi dimatikan'),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.notifications_off_outlined),
+                            label: const Text('Matikan Semua Notifikasi'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Card(
                 child: Column(
                   children: [
                     ListTile(
@@ -186,7 +287,7 @@ class SettingsScreen extends ConsumerWidget {
                   leading: Icon(Icons.info_outline),
                   title: Text('Tentang aplikasi'),
                   subtitle: Text(
-                      'Daily Schedule v1.0 • Offline personal schedule/checklist app dengan Flutter + Drift + SQLite.'),
+                      'Daily Schedule v1.0 - Offline personal schedule/checklist app dengan Flutter + Drift + SQLite.'),
                 ),
               ),
             ],
@@ -203,25 +304,30 @@ class SettingsScreen extends ConsumerWidget {
     required String title,
     required String initialValue,
   }) async {
-    final controller = TextEditingController(text: initialValue);
+    var input = initialValue;
     final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(title),
-        content: TextField(controller: controller, autofocus: true),
+        content: TextFormField(
+          initialValue: initialValue,
+          autofocus: true,
+          onChanged: (value) => input = value,
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Batal')),
           FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              onPressed: () => Navigator.pop(dialogContext, input.trim()),
               child: const Text('Simpan')),
         ],
       ),
     );
-    controller.dispose();
 
     if (result != null && result.isNotEmpty && context.mounted) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!context.mounted) return;
       await ref.read(scheduleRepositoryProvider).setSetting(key, result);
       if (!context.mounted) return;
       refreshMainProviders(ref);
