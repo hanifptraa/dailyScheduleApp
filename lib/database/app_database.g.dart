@@ -96,6 +96,50 @@ class $ScheduleItemsTable extends ScheduleItems
       type: DriftSqlType.int,
       requiredDuringInsert: false,
       defaultValue: const Constant(0));
+  static const VerificationMeta _reminderTypeMeta =
+      const VerificationMeta('reminderType');
+  @override
+  late final GeneratedColumn<String> reminderType = GeneratedColumn<String>(
+      'reminder_type', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('notification'));
+  static const VerificationMeta _reminderOffsetMinutesMeta =
+      const VerificationMeta('reminderOffsetMinutes');
+  @override
+  late final GeneratedColumn<int> reminderOffsetMinutes = GeneratedColumn<int>(
+      'reminder_offset_minutes', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _alarmSoundMeta =
+      const VerificationMeta('alarmSound');
+  @override
+  late final GeneratedColumn<String> alarmSound = GeneratedColumn<String>(
+      'alarm_sound', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('default'));
+  static const VerificationMeta _vibrateMeta =
+      const VerificationMeta('vibrate');
+  @override
+  late final GeneratedColumn<bool> vibrate = GeneratedColumn<bool>(
+      'vibrate', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("vibrate" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _enableAlarmMeta =
+      const VerificationMeta('enableAlarm');
+  @override
+  late final GeneratedColumn<bool> enableAlarm = GeneratedColumn<bool>(
+      'enable_alarm', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("enable_alarm" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -124,6 +168,11 @@ class $ScheduleItemsTable extends ScheduleItems
         isActive,
         enableNotification,
         notifyBeforeMinutes,
+        reminderType,
+        reminderOffsetMinutes,
+        alarmSound,
+        vibrate,
+        enableAlarm,
         createdAt,
         updatedAt
       ];
@@ -194,6 +243,34 @@ class $ScheduleItemsTable extends ScheduleItems
           notifyBeforeMinutes.isAcceptableOrUnknown(
               data['notify_before_minutes']!, _notifyBeforeMinutesMeta));
     }
+    if (data.containsKey('reminder_type')) {
+      context.handle(
+          _reminderTypeMeta,
+          reminderType.isAcceptableOrUnknown(
+              data['reminder_type']!, _reminderTypeMeta));
+    }
+    if (data.containsKey('reminder_offset_minutes')) {
+      context.handle(
+          _reminderOffsetMinutesMeta,
+          reminderOffsetMinutes.isAcceptableOrUnknown(
+              data['reminder_offset_minutes']!, _reminderOffsetMinutesMeta));
+    }
+    if (data.containsKey('alarm_sound')) {
+      context.handle(
+          _alarmSoundMeta,
+          alarmSound.isAcceptableOrUnknown(
+              data['alarm_sound']!, _alarmSoundMeta));
+    }
+    if (data.containsKey('vibrate')) {
+      context.handle(_vibrateMeta,
+          vibrate.isAcceptableOrUnknown(data['vibrate']!, _vibrateMeta));
+    }
+    if (data.containsKey('enable_alarm')) {
+      context.handle(
+          _enableAlarmMeta,
+          enableAlarm.isAcceptableOrUnknown(
+              data['enable_alarm']!, _enableAlarmMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -231,6 +308,16 @@ class $ScheduleItemsTable extends ScheduleItems
           DriftSqlType.bool, data['${effectivePrefix}enable_notification'])!,
       notifyBeforeMinutes: attachedDatabase.typeMapping.read(
           DriftSqlType.int, data['${effectivePrefix}notify_before_minutes'])!,
+      reminderType: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}reminder_type'])!,
+      reminderOffsetMinutes: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}reminder_offset_minutes'])!,
+      alarmSound: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}alarm_sound'])!,
+      vibrate: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}vibrate'])!,
+      enableAlarm: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}enable_alarm'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
       updatedAt: attachedDatabase.typeMapping
@@ -255,6 +342,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
   final bool isActive;
   final bool enableNotification;
   final int notifyBeforeMinutes;
+  final String reminderType;
+  final int reminderOffsetMinutes;
+  final String alarmSound;
+  final bool vibrate;
+  final bool enableAlarm;
   final DateTime createdAt;
   final DateTime updatedAt;
   const ScheduleItem(
@@ -268,6 +360,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       required this.isActive,
       required this.enableNotification,
       required this.notifyBeforeMinutes,
+      required this.reminderType,
+      required this.reminderOffsetMinutes,
+      required this.alarmSound,
+      required this.vibrate,
+      required this.enableAlarm,
       required this.createdAt,
       required this.updatedAt});
   @override
@@ -285,6 +382,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
     map['is_active'] = Variable<bool>(isActive);
     map['enable_notification'] = Variable<bool>(enableNotification);
     map['notify_before_minutes'] = Variable<int>(notifyBeforeMinutes);
+    map['reminder_type'] = Variable<String>(reminderType);
+    map['reminder_offset_minutes'] = Variable<int>(reminderOffsetMinutes);
+    map['alarm_sound'] = Variable<String>(alarmSound);
+    map['vibrate'] = Variable<bool>(vibrate);
+    map['enable_alarm'] = Variable<bool>(enableAlarm);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -304,6 +406,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       isActive: Value(isActive),
       enableNotification: Value(enableNotification),
       notifyBeforeMinutes: Value(notifyBeforeMinutes),
+      reminderType: Value(reminderType),
+      reminderOffsetMinutes: Value(reminderOffsetMinutes),
+      alarmSound: Value(alarmSound),
+      vibrate: Value(vibrate),
+      enableAlarm: Value(enableAlarm),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -324,6 +431,12 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       enableNotification: serializer.fromJson<bool>(json['enableNotification']),
       notifyBeforeMinutes:
           serializer.fromJson<int>(json['notifyBeforeMinutes']),
+      reminderType: serializer.fromJson<String>(json['reminderType']),
+      reminderOffsetMinutes:
+          serializer.fromJson<int>(json['reminderOffsetMinutes']),
+      alarmSound: serializer.fromJson<String>(json['alarmSound']),
+      vibrate: serializer.fromJson<bool>(json['vibrate']),
+      enableAlarm: serializer.fromJson<bool>(json['enableAlarm']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -342,6 +455,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       'isActive': serializer.toJson<bool>(isActive),
       'enableNotification': serializer.toJson<bool>(enableNotification),
       'notifyBeforeMinutes': serializer.toJson<int>(notifyBeforeMinutes),
+      'reminderType': serializer.toJson<String>(reminderType),
+      'reminderOffsetMinutes': serializer.toJson<int>(reminderOffsetMinutes),
+      'alarmSound': serializer.toJson<String>(alarmSound),
+      'vibrate': serializer.toJson<bool>(vibrate),
+      'enableAlarm': serializer.toJson<bool>(enableAlarm),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -358,6 +476,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
           bool? isActive,
           bool? enableNotification,
           int? notifyBeforeMinutes,
+          String? reminderType,
+          int? reminderOffsetMinutes,
+          String? alarmSound,
+          bool? vibrate,
+          bool? enableAlarm,
           DateTime? createdAt,
           DateTime? updatedAt}) =>
       ScheduleItem(
@@ -371,6 +494,12 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
         isActive: isActive ?? this.isActive,
         enableNotification: enableNotification ?? this.enableNotification,
         notifyBeforeMinutes: notifyBeforeMinutes ?? this.notifyBeforeMinutes,
+        reminderType: reminderType ?? this.reminderType,
+        reminderOffsetMinutes:
+            reminderOffsetMinutes ?? this.reminderOffsetMinutes,
+        alarmSound: alarmSound ?? this.alarmSound,
+        vibrate: vibrate ?? this.vibrate,
+        enableAlarm: enableAlarm ?? this.enableAlarm,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );
@@ -393,6 +522,17 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       notifyBeforeMinutes: data.notifyBeforeMinutes.present
           ? data.notifyBeforeMinutes.value
           : this.notifyBeforeMinutes,
+      reminderType: data.reminderType.present
+          ? data.reminderType.value
+          : this.reminderType,
+      reminderOffsetMinutes: data.reminderOffsetMinutes.present
+          ? data.reminderOffsetMinutes.value
+          : this.reminderOffsetMinutes,
+      alarmSound:
+          data.alarmSound.present ? data.alarmSound.value : this.alarmSound,
+      vibrate: data.vibrate.present ? data.vibrate.value : this.vibrate,
+      enableAlarm:
+          data.enableAlarm.present ? data.enableAlarm.value : this.enableAlarm,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -411,6 +551,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
           ..write('isActive: $isActive, ')
           ..write('enableNotification: $enableNotification, ')
           ..write('notifyBeforeMinutes: $notifyBeforeMinutes, ')
+          ..write('reminderType: $reminderType, ')
+          ..write('reminderOffsetMinutes: $reminderOffsetMinutes, ')
+          ..write('alarmSound: $alarmSound, ')
+          ..write('vibrate: $vibrate, ')
+          ..write('enableAlarm: $enableAlarm, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -429,6 +574,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       isActive,
       enableNotification,
       notifyBeforeMinutes,
+      reminderType,
+      reminderOffsetMinutes,
+      alarmSound,
+      vibrate,
+      enableAlarm,
       createdAt,
       updatedAt);
   @override
@@ -445,6 +595,11 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
           other.isActive == this.isActive &&
           other.enableNotification == this.enableNotification &&
           other.notifyBeforeMinutes == this.notifyBeforeMinutes &&
+          other.reminderType == this.reminderType &&
+          other.reminderOffsetMinutes == this.reminderOffsetMinutes &&
+          other.alarmSound == this.alarmSound &&
+          other.vibrate == this.vibrate &&
+          other.enableAlarm == this.enableAlarm &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -460,6 +615,11 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
   final Value<bool> isActive;
   final Value<bool> enableNotification;
   final Value<int> notifyBeforeMinutes;
+  final Value<String> reminderType;
+  final Value<int> reminderOffsetMinutes;
+  final Value<String> alarmSound;
+  final Value<bool> vibrate;
+  final Value<bool> enableAlarm;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   const ScheduleItemsCompanion({
@@ -473,6 +633,11 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     this.isActive = const Value.absent(),
     this.enableNotification = const Value.absent(),
     this.notifyBeforeMinutes = const Value.absent(),
+    this.reminderType = const Value.absent(),
+    this.reminderOffsetMinutes = const Value.absent(),
+    this.alarmSound = const Value.absent(),
+    this.vibrate = const Value.absent(),
+    this.enableAlarm = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   });
@@ -487,6 +652,11 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     this.isActive = const Value.absent(),
     this.enableNotification = const Value.absent(),
     this.notifyBeforeMinutes = const Value.absent(),
+    this.reminderType = const Value.absent(),
+    this.reminderOffsetMinutes = const Value.absent(),
+    this.alarmSound = const Value.absent(),
+    this.vibrate = const Value.absent(),
+    this.enableAlarm = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
   })  : title = Value(title),
@@ -505,6 +675,11 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     Expression<bool>? isActive,
     Expression<bool>? enableNotification,
     Expression<int>? notifyBeforeMinutes,
+    Expression<String>? reminderType,
+    Expression<int>? reminderOffsetMinutes,
+    Expression<String>? alarmSound,
+    Expression<bool>? vibrate,
+    Expression<bool>? enableAlarm,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
   }) {
@@ -520,6 +695,12 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
       if (enableNotification != null) 'enable_notification': enableNotification,
       if (notifyBeforeMinutes != null)
         'notify_before_minutes': notifyBeforeMinutes,
+      if (reminderType != null) 'reminder_type': reminderType,
+      if (reminderOffsetMinutes != null)
+        'reminder_offset_minutes': reminderOffsetMinutes,
+      if (alarmSound != null) 'alarm_sound': alarmSound,
+      if (vibrate != null) 'vibrate': vibrate,
+      if (enableAlarm != null) 'enable_alarm': enableAlarm,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
     });
@@ -536,6 +717,11 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
       Value<bool>? isActive,
       Value<bool>? enableNotification,
       Value<int>? notifyBeforeMinutes,
+      Value<String>? reminderType,
+      Value<int>? reminderOffsetMinutes,
+      Value<String>? alarmSound,
+      Value<bool>? vibrate,
+      Value<bool>? enableAlarm,
       Value<DateTime>? createdAt,
       Value<DateTime>? updatedAt}) {
     return ScheduleItemsCompanion(
@@ -549,6 +735,12 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
       isActive: isActive ?? this.isActive,
       enableNotification: enableNotification ?? this.enableNotification,
       notifyBeforeMinutes: notifyBeforeMinutes ?? this.notifyBeforeMinutes,
+      reminderType: reminderType ?? this.reminderType,
+      reminderOffsetMinutes:
+          reminderOffsetMinutes ?? this.reminderOffsetMinutes,
+      alarmSound: alarmSound ?? this.alarmSound,
+      vibrate: vibrate ?? this.vibrate,
+      enableAlarm: enableAlarm ?? this.enableAlarm,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -587,6 +779,22 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     if (notifyBeforeMinutes.present) {
       map['notify_before_minutes'] = Variable<int>(notifyBeforeMinutes.value);
     }
+    if (reminderType.present) {
+      map['reminder_type'] = Variable<String>(reminderType.value);
+    }
+    if (reminderOffsetMinutes.present) {
+      map['reminder_offset_minutes'] =
+          Variable<int>(reminderOffsetMinutes.value);
+    }
+    if (alarmSound.present) {
+      map['alarm_sound'] = Variable<String>(alarmSound.value);
+    }
+    if (vibrate.present) {
+      map['vibrate'] = Variable<bool>(vibrate.value);
+    }
+    if (enableAlarm.present) {
+      map['enable_alarm'] = Variable<bool>(enableAlarm.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -609,6 +817,11 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
           ..write('isActive: $isActive, ')
           ..write('enableNotification: $enableNotification, ')
           ..write('notifyBeforeMinutes: $notifyBeforeMinutes, ')
+          ..write('reminderType: $reminderType, ')
+          ..write('reminderOffsetMinutes: $reminderOffsetMinutes, ')
+          ..write('alarmSound: $alarmSound, ')
+          ..write('vibrate: $vibrate, ')
+          ..write('enableAlarm: $enableAlarm, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1962,6 +2175,11 @@ typedef $$ScheduleItemsTableCreateCompanionBuilder = ScheduleItemsCompanion
   Value<bool> isActive,
   Value<bool> enableNotification,
   Value<int> notifyBeforeMinutes,
+  Value<String> reminderType,
+  Value<int> reminderOffsetMinutes,
+  Value<String> alarmSound,
+  Value<bool> vibrate,
+  Value<bool> enableAlarm,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
 });
@@ -1977,6 +2195,11 @@ typedef $$ScheduleItemsTableUpdateCompanionBuilder = ScheduleItemsCompanion
   Value<bool> isActive,
   Value<bool> enableNotification,
   Value<int> notifyBeforeMinutes,
+  Value<String> reminderType,
+  Value<int> reminderOffsetMinutes,
+  Value<String> alarmSound,
+  Value<bool> vibrate,
+  Value<bool> enableAlarm,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
 });
@@ -2044,6 +2267,22 @@ class $$ScheduleItemsTableFilterComposer
   ColumnFilters<int> get notifyBeforeMinutes => $composableBuilder(
       column: $table.notifyBeforeMinutes,
       builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get reminderType => $composableBuilder(
+      column: $table.reminderType, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get reminderOffsetMinutes => $composableBuilder(
+      column: $table.reminderOffsetMinutes,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get alarmSound => $composableBuilder(
+      column: $table.alarmSound, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get vibrate => $composableBuilder(
+      column: $table.vibrate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get enableAlarm => $composableBuilder(
+      column: $table.enableAlarm, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -2115,6 +2354,23 @@ class $$ScheduleItemsTableOrderingComposer
       column: $table.notifyBeforeMinutes,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get reminderType => $composableBuilder(
+      column: $table.reminderType,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get reminderOffsetMinutes => $composableBuilder(
+      column: $table.reminderOffsetMinutes,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get alarmSound => $composableBuilder(
+      column: $table.alarmSound, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get vibrate => $composableBuilder(
+      column: $table.vibrate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get enableAlarm => $composableBuilder(
+      column: $table.enableAlarm, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 
@@ -2160,6 +2416,21 @@ class $$ScheduleItemsTableAnnotationComposer
 
   GeneratedColumn<int> get notifyBeforeMinutes => $composableBuilder(
       column: $table.notifyBeforeMinutes, builder: (column) => column);
+
+  GeneratedColumn<String> get reminderType => $composableBuilder(
+      column: $table.reminderType, builder: (column) => column);
+
+  GeneratedColumn<int> get reminderOffsetMinutes => $composableBuilder(
+      column: $table.reminderOffsetMinutes, builder: (column) => column);
+
+  GeneratedColumn<String> get alarmSound => $composableBuilder(
+      column: $table.alarmSound, builder: (column) => column);
+
+  GeneratedColumn<bool> get vibrate =>
+      $composableBuilder(column: $table.vibrate, builder: (column) => column);
+
+  GeneratedColumn<bool> get enableAlarm => $composableBuilder(
+      column: $table.enableAlarm, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -2222,6 +2493,11 @@ class $$ScheduleItemsTableTableManager extends RootTableManager<
             Value<bool> isActive = const Value.absent(),
             Value<bool> enableNotification = const Value.absent(),
             Value<int> notifyBeforeMinutes = const Value.absent(),
+            Value<String> reminderType = const Value.absent(),
+            Value<int> reminderOffsetMinutes = const Value.absent(),
+            Value<String> alarmSound = const Value.absent(),
+            Value<bool> vibrate = const Value.absent(),
+            Value<bool> enableAlarm = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
           }) =>
@@ -2236,6 +2512,11 @@ class $$ScheduleItemsTableTableManager extends RootTableManager<
             isActive: isActive,
             enableNotification: enableNotification,
             notifyBeforeMinutes: notifyBeforeMinutes,
+            reminderType: reminderType,
+            reminderOffsetMinutes: reminderOffsetMinutes,
+            alarmSound: alarmSound,
+            vibrate: vibrate,
+            enableAlarm: enableAlarm,
             createdAt: createdAt,
             updatedAt: updatedAt,
           ),
@@ -2250,6 +2531,11 @@ class $$ScheduleItemsTableTableManager extends RootTableManager<
             Value<bool> isActive = const Value.absent(),
             Value<bool> enableNotification = const Value.absent(),
             Value<int> notifyBeforeMinutes = const Value.absent(),
+            Value<String> reminderType = const Value.absent(),
+            Value<int> reminderOffsetMinutes = const Value.absent(),
+            Value<String> alarmSound = const Value.absent(),
+            Value<bool> vibrate = const Value.absent(),
+            Value<bool> enableAlarm = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
           }) =>
@@ -2264,6 +2550,11 @@ class $$ScheduleItemsTableTableManager extends RootTableManager<
             isActive: isActive,
             enableNotification: enableNotification,
             notifyBeforeMinutes: notifyBeforeMinutes,
+            reminderType: reminderType,
+            reminderOffsetMinutes: reminderOffsetMinutes,
+            alarmSound: alarmSound,
+            vibrate: vibrate,
+            enableAlarm: enableAlarm,
             createdAt: createdAt,
             updatedAt: updatedAt,
           ),

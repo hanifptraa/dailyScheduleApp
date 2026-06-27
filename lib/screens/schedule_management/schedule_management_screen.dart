@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../database/app_database.dart';
 import '../../models/schedule_mode.dart';
+import '../../models/reminder_models.dart';
 import '../../providers/app_providers.dart';
 import '../../tutorial/tutorial_keys.dart';
 import '../../utils/time_utils.dart';
@@ -293,6 +294,7 @@ class ScheduleManagementScreen extends ConsumerWidget {
       return;
     }
     final repo = ref.read(scheduleRepositoryProvider);
+    var scheduleResult = ReminderScheduleResult.skipped;
     try {
       if (item == null) {
         final id = await repo.createScheduleItem(
@@ -304,12 +306,19 @@ class ScheduleManagementScreen extends ConsumerWidget {
           mode: draft.mode,
           enableNotification: draft.enableNotification,
           notifyBeforeMinutes: draft.notifyBeforeMinutes,
+          reminderType: draft.reminderType,
+          reminderOffsetMinutes: draft.reminderOffsetMinutes,
+          alarmSound: draft.alarmSound,
+          vibrate: draft.vibrate,
+          enableAlarm: draft.enableAlarm,
         );
         final savedItem = await repo.getScheduleItemById(id);
         if (savedItem != null && draft.enableNotification) {
-          await ref
-              .read(notificationServiceProvider)
-              .scheduleScheduleItemNotification(item: savedItem);
+          scheduleResult = await _requestPermissionsAndSchedule(
+            ref,
+            item: savedItem,
+            draft: draft,
+          );
         }
       } else {
         await ref
@@ -326,25 +335,39 @@ class ScheduleManagementScreen extends ConsumerWidget {
           isActive: draft.isActive,
           enableNotification: draft.enableNotification,
           notifyBeforeMinutes: draft.notifyBeforeMinutes,
+          reminderType: draft.reminderType,
+          reminderOffsetMinutes: draft.reminderOffsetMinutes,
+          alarmSound: draft.alarmSound,
+          vibrate: draft.vibrate,
+          enableAlarm: draft.enableAlarm,
         );
         final savedItem = await repo.getScheduleItemById(item.id);
         if (savedItem != null &&
             savedItem.isActive &&
             savedItem.enableNotification) {
-          await ref
-              .read(notificationServiceProvider)
-              .scheduleScheduleItemNotification(item: savedItem);
+          scheduleResult = await _requestPermissionsAndSchedule(
+            ref,
+            item: savedItem,
+            draft: draft,
+          );
         }
       }
       if (!context.mounted) return;
       ref.read(scheduleModeFilterProvider.notifier).setMode(draft.mode);
       _refreshAfterFrame(context, ref);
+      final message = switch (scheduleResult) {
+        ReminderScheduleResult.fallbackNotification =>
+          'Jadwal disimpan. Alarm belum diizinkan, jadi pengingat memakai notifikasi biasa.',
+        ReminderScheduleResult.missingNotificationPermission =>
+          'Jadwal disimpan. Izin notifikasi belum aktif, jadi pengingat belum dijadwalkan.',
+        ReminderScheduleResult.failed =>
+          'Jadwal disimpan, tapi pengingat belum bisa dijadwalkan. Cek izin alarm/notifikasi.',
+        _ => item == null
+            ? 'Jadwal berhasil ditambahkan'
+            : 'Jadwal berhasil diperbarui',
+      };
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(item == null
-              ? 'Jadwal berhasil ditambahkan'
-              : 'Jadwal berhasil diperbarui'),
-        ),
+        SnackBar(content: Text(message)),
       );
     } catch (error) {
       if (!context.mounted) return;
@@ -352,6 +375,19 @@ class ScheduleManagementScreen extends ConsumerWidget {
         SnackBar(content: Text('Gagal menyimpan jadwal: $error')),
       );
     }
+  }
+
+  Future<ReminderScheduleResult> _requestPermissionsAndSchedule(
+    WidgetRef ref, {
+    required ScheduleItem item,
+    required ScheduleFormDraft draft,
+  }) async {
+    final notificationService = ref.read(notificationServiceProvider);
+    await notificationService.requestNotificationPermission();
+    if (draft.enableAlarm && draft.reminderType == ReminderType.alarm.value) {
+      await ref.read(alarmServiceProvider).requestAlarmPermission();
+    }
+    return notificationService.scheduleScheduleItemReminder(item: item);
   }
 
   void _openModeManager(
@@ -679,6 +715,11 @@ class ScheduleFormDraft {
     required this.isActive,
     required this.enableNotification,
     required this.notifyBeforeMinutes,
+    required this.reminderType,
+    required this.reminderOffsetMinutes,
+    required this.alarmSound,
+    required this.vibrate,
+    required this.enableAlarm,
   });
 
   final String title;
@@ -690,6 +731,11 @@ class ScheduleFormDraft {
   final bool isActive;
   final bool enableNotification;
   final int notifyBeforeMinutes;
+  final String reminderType;
+  final int reminderOffsetMinutes;
+  final String alarmSound;
+  final bool vibrate;
+  final bool enableAlarm;
 }
 
 class ScheduleFormSheet extends StatefulWidget {
@@ -724,6 +770,9 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
   late TimeOfDay _end;
   late bool _isActive;
   late bool _enableNotification;
+  late ReminderType _reminderType;
+  late AlarmSoundOption _alarmSound;
+  late bool _vibrate;
   late List<ScheduleModeOption> _availableModes;
   late final List<String> _selectedCategories;
   String? _formMessage;
@@ -755,6 +804,9 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
         : AppTimeUtils.toTimeOfDay(item.endTime);
     _isActive = item?.isActive ?? true;
     _enableNotification = item?.enableNotification ?? true;
+    _reminderType = ReminderType.fromValue(item?.reminderType);
+    _alarmSound = AlarmSoundOption.fromValue(item?.alarmSound);
+    _vibrate = item?.vibrate ?? true;
   }
 
   @override
@@ -911,38 +963,86 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
                 icon: Icons.notifications_active_outlined,
                 title: 'Pengingat Jadwal',
                 subtitle:
-                    'Atur apakah jadwal ini perlu mengirim notifikasi pengingat.',
+                    'Aktifkan pengingat, lalu pilih notifikasi biasa atau alarm berbunyi.',
               ),
               const SizedBox(height: 10),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Aktifkan Notifikasi'),
+                title: const Text('Aktifkan Pengingat'),
+                subtitle: const Text(
+                    'Pengingat bisa berupa notifikasi biasa atau alarm.'),
                 value: _enableNotification,
                 onChanged: (value) =>
                     setState(() => _enableNotification = value),
               ),
-              AnimatedOpacity(
-                opacity: _enableNotification ? 1 : 0.45,
-                duration: const Duration(milliseconds: 180),
-                child: IgnorePointer(
-                  ignoring: !_enableNotification,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(8),
+              if (_enableNotification) ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _reminderType.value,
+                  decoration: const InputDecoration(
+                    labelText: 'Jenis pengingat',
+                    prefixIcon: Icon(Icons.notifications_active_outlined),
+                  ),
+                  items: ReminderType.values
+                      .map((item) => DropdownMenuItem(
+                            value: item.value,
+                            child: Text(item.label),
+                          ))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(
+                        () => _reminderType = ReminderType.fromValue(value));
+                  },
+                ),
+                if (_reminderType == ReminderType.alarm) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _alarmSound.value,
+                    decoration: const InputDecoration(
+                      labelText: 'Suara alarm',
+                      prefixIcon: Icon(Icons.volume_up_outlined),
                     ),
-                    child: Text(
-                      'Notifikasi akan muncul tepat saat jadwal dimulai.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
+                    items: AlarmSoundOption.values
+                        .map((item) => DropdownMenuItem(
+                              value: item.value,
+                              child: Text(item.label),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() =>
+                          _alarmSound = AlarmSoundOption.fromValue(value));
+                    },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Vibrasi'),
+                    subtitle:
+                        const Text('Gunakan getaran jika device mendukung.'),
+                    value: _vibrate,
+                    onChanged: (value) => setState(() => _vibrate = value),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _reminderType == ReminderType.alarm
+                        ? 'Jika izin alarm belum aktif, pengingat akan otomatis memakai notifikasi biasa.'
+                        : 'Notifikasi biasa akan muncul tepat saat jadwal dimulai.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 18),
               if (_formMessage != null) ...[
                 Container(
@@ -1125,7 +1225,7 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
     final start = AppTimeUtils.fromTimeOfDay(_start);
     final end = AppTimeUtils.fromTimeOfDay(_end);
     if (!AppTimeUtils.isValidRange(start, end)) {
-      _showFormMessage('Jam mulai tidak boleh lebih besar dari jam selesai');
+      _showFormMessage('Jam mulai dan selesai tidak boleh sama');
       return;
     }
 
@@ -1141,6 +1241,11 @@ class _ScheduleFormSheetState extends State<ScheduleFormSheet> {
         isActive: _isActive,
         enableNotification: _enableNotification,
         notifyBeforeMinutes: 0,
+        reminderType: _reminderType.value,
+        reminderOffsetMinutes: 0,
+        alarmSound: _alarmSound.value,
+        vibrate: _vibrate,
+        enableAlarm: _enableNotification && _reminderType == ReminderType.alarm,
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
 import '../models/schedule_mode.dart';
+import '../models/reminder_models.dart';
 import '../models/today_models.dart';
 import '../utils/date_utils.dart';
 import '../utils/time_utils.dart';
@@ -389,6 +390,11 @@ class ScheduleRepository {
     required ScheduleModeOption mode,
     required bool enableNotification,
     required int notifyBeforeMinutes,
+    String reminderType = 'notification',
+    int reminderOffsetMinutes = 0,
+    String alarmSound = 'default',
+    bool vibrate = true,
+    bool enableAlarm = false,
   }) async {
     final now = DateTime.now();
     return db.into(db.scheduleItems).insert(
@@ -404,6 +410,11 @@ class ScheduleRepository {
             isActive: const Value(true),
             enableNotification: Value(enableNotification),
             notifyBeforeMinutes: Value(notifyBeforeMinutes),
+            reminderType: Value(ReminderType.fromValue(reminderType).value),
+            reminderOffsetMinutes: Value(reminderOffsetMinutes),
+            alarmSound: Value(AlarmSoundOption.fromValue(alarmSound).value),
+            vibrate: Value(vibrate),
+            enableAlarm: Value(enableAlarm),
             createdAt: Value(now),
             updatedAt: Value(now),
           ),
@@ -421,6 +432,11 @@ class ScheduleRepository {
     required bool isActive,
     required bool enableNotification,
     required int notifyBeforeMinutes,
+    String reminderType = 'notification',
+    int reminderOffsetMinutes = 0,
+    String alarmSound = 'default',
+    bool vibrate = true,
+    bool enableAlarm = false,
   }) async {
     await (db.update(db.scheduleItems)..where((t) => t.id.equals(id))).write(
       ScheduleItemsCompanion(
@@ -435,6 +451,11 @@ class ScheduleRepository {
         isActive: Value(isActive),
         enableNotification: Value(enableNotification),
         notifyBeforeMinutes: Value(notifyBeforeMinutes),
+        reminderType: Value(ReminderType.fromValue(reminderType).value),
+        reminderOffsetMinutes: Value(reminderOffsetMinutes),
+        alarmSound: Value(AlarmSoundOption.fromValue(alarmSound).value),
+        vibrate: Value(vibrate),
+        enableAlarm: Value(enableAlarm),
         updatedAt: Value(DateTime.now()),
       ),
     );

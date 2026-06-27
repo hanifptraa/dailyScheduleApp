@@ -20,6 +20,6 @@ class AppTimeUtils {
   }
 
   static bool isValidRange(String start, String end) {
-    return toMinutes(start) <= toMinutes(end);
+    return toMinutes(start) != toMinutes(end);
   }
 }

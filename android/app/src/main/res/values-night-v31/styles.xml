@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">#111513</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_daily_schedule_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#0F766E</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:statusBarColor">#111513</item>
+        <item name="android:navigationBarColor">#111513</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
+
+

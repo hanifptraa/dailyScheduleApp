@@ -6,6 +6,7 @@ import '../models/schedule_mode.dart';
 import '../models/today_models.dart';
 import '../repositories/schedule_repository.dart';
 import '../services/notification_service.dart';
+import '../services/alarm_service.dart';
 import '../utils/date_utils.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -20,8 +21,16 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
   return NotificationService.instance;
 });
 
+final alarmServiceProvider = Provider<AlarmService>((ref) {
+  return AlarmService(ref.watch(notificationServiceProvider));
+});
+
 final notificationPermissionProvider = FutureProvider<bool>((ref) async {
   return ref.watch(notificationServiceProvider).hasNotificationPermission();
+});
+
+final alarmPermissionProvider = FutureProvider<bool>((ref) async {
+  return ref.watch(alarmServiceProvider).hasAlarmPermission();
 });
 final navigationIndexProvider = NotifierProvider<NavigationIndexNotifier, int>(
   NavigationIndexNotifier.new,

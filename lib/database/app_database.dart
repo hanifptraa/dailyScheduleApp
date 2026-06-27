@@ -16,6 +16,13 @@ class ScheduleItems extends Table {
       boolean().withDefault(const Constant(true))();
   IntColumn get notifyBeforeMinutes =>
       integer().withDefault(const Constant(0))();
+  TextColumn get reminderType =>
+      text().withDefault(const Constant('notification'))();
+  IntColumn get reminderOffsetMinutes =>
+      integer().withDefault(const Constant(0))();
+  TextColumn get alarmSound => text().withDefault(const Constant('default'))();
+  BoolColumn get vibrate => boolean().withDefault(const Constant(true))();
+  BoolColumn get enableAlarm => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }
@@ -68,7 +75,7 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'daily_schedule'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -77,6 +84,14 @@ class AppDatabase extends _$AppDatabase {
           if (from < 2) {
             await m.addColumn(scheduleItems, scheduleItems.enableNotification);
             await m.addColumn(scheduleItems, scheduleItems.notifyBeforeMinutes);
+          }
+          if (from < 3) {
+            await m.addColumn(scheduleItems, scheduleItems.reminderType);
+            await m.addColumn(
+                scheduleItems, scheduleItems.reminderOffsetMinutes);
+            await m.addColumn(scheduleItems, scheduleItems.alarmSound);
+            await m.addColumn(scheduleItems, scheduleItems.vibrate);
+            await m.addColumn(scheduleItems, scheduleItems.enableAlarm);
           }
         },
       );

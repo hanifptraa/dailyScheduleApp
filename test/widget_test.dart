@@ -15,7 +15,9 @@ void main() {
     expect(AppTimeUtils.fromTimeOfDay(const TimeOfDay(hour: 9, minute: 5)),
         '09:05');
     expect(AppTimeUtils.isValidRange('08:00', '09:00'), isTrue);
-    expect(AppTimeUtils.isValidRange('10:00', '09:00'), isFalse);
+    expect(AppTimeUtils.isValidRange('10:00', '09:00'), isTrue);
+    expect(AppTimeUtils.isValidRange('21:00', '03:00'), isTrue);
+    expect(AppTimeUtils.isValidRange('10:00', '10:00'), isFalse);
   });
 
   test('Statistics insight is positive when all agenda is completed', () async {
@@ -203,7 +205,8 @@ void main() {
     await tester.tap(find.text('Edit').last);
     await _pumpUntilFound(tester, find.text('Pengingat Jadwal'));
     expect(find.text('Pilih hari untuk jadwal'), findsOneWidget);
-    expect(find.text('Aktifkan Notifikasi'), findsOneWidget);
+    expect(find.text('Aktifkan Pengingat'), findsOneWidget);
+    expect(find.text('Notifikasi biasa'), findsOneWidget);
     expect(find.text('Aktif'), findsNothing);
 
     await tester.enterText(find.byType(TextFormField).last, 'Ujian');

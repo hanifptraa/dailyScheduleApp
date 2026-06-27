@@ -13,6 +13,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncSettings = ref.watch(settingsProvider);
     final asyncPermission = ref.watch(notificationPermissionProvider);
+    final asyncAlarmPermission = ref.watch(alarmPermissionProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Setelan')),
@@ -25,6 +26,7 @@ class SettingsScreen extends ConsumerWidget {
           final themeMode = settings['themeMode'] == 'dark' ? 'dark' : 'light';
           final targetSleep = settings['targetSleep'] ?? '21:00';
           final targetWake = settings['targetWake'] ?? '03:00';
+          final alarmPermissionAllowed = asyncAlarmPermission.value ?? false;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
@@ -123,7 +125,7 @@ class SettingsScreen extends ConsumerWidget {
                         children: [
                           const Icon(Icons.notifications_active_outlined),
                           const SizedBox(width: 10),
-                          Text('Notifikasi',
+                          Text('Pengingat & Alarm',
                               style: Theme.of(context)
                                   .textTheme
                                   .titleSmall
@@ -158,38 +160,103 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      asyncAlarmPermission.when(
+                        loading: () => const LinearProgressIndicator(),
+                        error: (_, __) =>
+                            const Text('Status izin alarm belum bisa dibaca.'),
+                        data: (allowed) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Status izin alarm: ${allowed ? 'Aktif' : 'Belum aktif'}',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            if (!allowed) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Alarm belum aktif. Tekan tombol Cek Izin Alarm sampai status menjadi Aktif. Pada beberapa HP perlu 2-3 kali karena langkahnya berbeda: alarm tepat waktu, notifikasi layar penuh, lalu mulai otomatis/latar belakang. Jika masuk ke Detail baterai, pilih "Tidak ada pembatasan" agar alarm tetap berbunyi saat app ditutup dari recent apps. Jangan pilih penghemat baterai/rekomendasi, tutup app otomatis, atau batasi app latar belakang.',
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
                           OutlinedButton.icon(
                             onPressed: () async {
-                              await ref
+                              final allowed = await ref
                                   .read(notificationServiceProvider)
                                   .requestNotificationPermission();
                               ref.invalidate(notificationPermissionProvider);
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(allowed
+                                      ? 'Izin notifikasi aktif'
+                                      : 'Notifikasi belum diizinkan. Pengingat belum bisa muncul.'),
+                                ),
+                              );
                             },
                             icon: const Icon(Icons.verified_user_outlined),
                             label: const Text('Cek Izin Notifikasi'),
                           ),
                           OutlinedButton.icon(
                             onPressed: () async {
+                              if (alarmPermissionAllowed) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Izin alarm sudah aktif'),
+                                  ),
+                                );
+                                return;
+                              }
+                              final allowed = await ref
+                                  .read(alarmServiceProvider)
+                                  .requestAlarmPermission();
+                              ref.invalidate(alarmPermissionProvider);
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(allowed
+                                      ? 'Izin alarm aktif'
+                                      : 'Lanjutkan: tekan Cek Izin Alarm lagi. Di Detail baterai pilih "Tidak ada pembatasan".'),
+                                ),
+                              );
+                            },
+                            icon: Icon(alarmPermissionAllowed
+                                ? Icons.alarm_on
+                                : Icons.alarm_on_outlined),
+                            label: Text(alarmPermissionAllowed
+                                ? 'Izin Alarm Aktif'
+                                : 'Cek Izin Alarm'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () async {
                               await ref
                                   .read(notificationServiceProvider)
-                                  .rescheduleTodayNotifications(
+                                  .rescheduleTodayReminders(
                                     ref.read(scheduleRepositoryProvider),
                                   );
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
-                                      'Notifikasi hari ini dijadwalkan ulang'),
+                                      'Pengingat hari ini dijadwalkan ulang'),
                                 ),
                               );
                             },
                             icon: const Icon(Icons.refresh_outlined),
                             label: const Text(
-                                'Jadwalkan Ulang Notifikasi Hari Ini'),
+                                'Jadwalkan Ulang Pengingat Hari Ini'),
                           ),
                           OutlinedButton.icon(
                             onPressed: () async {
@@ -199,12 +266,12 @@ class SettingsScreen extends ConsumerWidget {
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Semua notifikasi dimatikan'),
+                                  content: Text('Semua pengingat dimatikan'),
                                 ),
                               );
                             },
                             icon: const Icon(Icons.notifications_off_outlined),
-                            label: const Text('Matikan Semua Notifikasi'),
+                            label: const Text('Matikan Semua Pengingat'),
                           ),
                         ],
                       ),

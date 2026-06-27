@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,12 +14,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final database = AppDatabase();
   final repository = ScheduleRepository(database);
-  await repository.seedDefaultDataIfNeeded();
-  await NotificationService.instance.initialize();
-  await NotificationService.instance.requestNotificationPermission();
-  await NotificationService.instance.rescheduleTodayNotifications(repository);
   final initialThemeMode =
-      await repository.getSetting('themeMode', 'light') == 'dark'
+      ui.PlatformDispatcher.instance.platformBrightness == ui.Brightness.dark
           ? ThemeMode.dark
           : ThemeMode.light;
 
@@ -28,4 +27,12 @@ Future<void> main() async {
       child: DailyScheduleApp(initialThemeMode: initialThemeMode),
     ),
   );
+
+  unawaited(_prepareAppStartup(repository));
+}
+
+Future<void> _prepareAppStartup(ScheduleRepository repository) async {
+  await repository.seedDefaultDataIfNeeded();
+  await NotificationService.instance.initialize();
+  await NotificationService.instance.rescheduleTodayNotifications(repository);
 }
